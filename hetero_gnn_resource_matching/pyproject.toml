@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hetero-gnn-resource-matching"
+version = "0.1.0"
+description = "Task-conditioned heterogeneous resource graph matching prototype with PyTorch Geometric."
+requires-python = ">=3.10"
+dependencies = [
+  "torch>=2.1",
+  "torch-geometric>=2.4",
+  "networkx>=3.0",
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "scikit-learn>=1.3",
+  "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.4"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
