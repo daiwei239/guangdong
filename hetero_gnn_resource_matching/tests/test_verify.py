@@ -1,4 +1,4 @@
-from resource_mapping.verify import ResourceVerifier
+from resource_mapping.step_05_ranking_verification.verify import ResourceVerifier
 
 
 def test_verify_satisfied_and_unsatisfied() -> None:

@@ -1,6 +1,6 @@
 import numpy as np
 
-from resource_mapping.task_vectorizer import TaskVectorizer
+from resource_mapping.step_03_task_expression.task_vectorizer import TaskVectorizer
 
 
 def test_task_vectorizer_fixed_dim_no_nan() -> None:

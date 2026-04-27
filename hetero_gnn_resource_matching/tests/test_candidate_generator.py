@@ -1,4 +1,4 @@
-from resource_mapping.candidate_generator import CandidateGenerator
+from resource_mapping.step_04_candidate_gnn_matching.candidate_generator import CandidateGenerator
 
 
 def test_candidate_generator_returns_candidate() -> None:

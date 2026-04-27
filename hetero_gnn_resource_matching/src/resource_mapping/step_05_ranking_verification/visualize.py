@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
-from resource_mapping.io_utils import load_json, load_yaml, resolve_path
+from resource_mapping.step_01_resource_description.io_utils import load_json, load_yaml, resolve_path
 
 
 def _safe_load_json(path: Path, default: Any) -> Any:

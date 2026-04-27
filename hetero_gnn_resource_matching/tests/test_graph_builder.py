@@ -1,5 +1,5 @@
-from resource_mapping.constants import EDGE_TYPES, NODE_TYPES
-from resource_mapping.graph_builder import ResourceGraphBuilder
+from resource_mapping.step_01_resource_description.constants import EDGE_TYPES, NODE_TYPES
+from resource_mapping.step_02_resource_graph.graph_builder import ResourceGraphBuilder
 
 
 def test_graph_builder_contains_all_types() -> None:

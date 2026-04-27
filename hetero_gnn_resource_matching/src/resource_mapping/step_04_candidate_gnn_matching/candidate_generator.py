@@ -6,7 +6,7 @@ import random
 from collections import defaultdict
 from typing import Any
 
-from resource_mapping.constants import CANDIDATE_NODE_TEMPLATE, NODE_TYPES
+from resource_mapping.step_01_resource_description.constants import CANDIDATE_NODE_TEMPLATE, NODE_TYPES
 
 
 class CandidateGenerator:

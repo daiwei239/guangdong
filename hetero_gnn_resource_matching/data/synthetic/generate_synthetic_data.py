@@ -11,9 +11,9 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src"))
 
-from resource_mapping.candidate_generator import CandidateGenerator
-from resource_mapping.io_utils import save_json, set_seed
-from resource_mapping.label_generator import LabelGenerator
+from resource_mapping.step_01_resource_description.io_utils import save_json, set_seed
+from resource_mapping.step_04_candidate_gnn_matching.candidate_generator import CandidateGenerator
+from resource_mapping.step_04_candidate_gnn_matching.label_generator import LabelGenerator
 
 
 def _resource(node_type: str, idx: int, rng: random.Random) -> dict[str, Any]:

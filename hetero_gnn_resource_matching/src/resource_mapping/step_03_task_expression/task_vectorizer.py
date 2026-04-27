@@ -6,7 +6,7 @@ from typing import Any
 
 import numpy as np
 
-from resource_mapping.constants import DOMINANT_MODES, TASK_NUMERIC_FIELDS, TASK_TYPES
+from resource_mapping.step_01_resource_description.constants import DOMINANT_MODES, TASK_NUMERIC_FIELDS, TASK_TYPES
 
 
 class TaskVectorizer:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from resource_mapping.verify import ResourceVerifier
+from resource_mapping.step_05_ranking_verification.verify import ResourceVerifier
 
 
 class LabelGenerator:

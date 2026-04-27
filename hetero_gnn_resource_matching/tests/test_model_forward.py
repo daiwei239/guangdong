@@ -1,8 +1,8 @@
 import torch
 
-from resource_mapping.graph_builder import ResourceGraphBuilder
-from resource_mapping.model import TaskConditionedResourceMatcher
-from resource_mapping.task_vectorizer import TaskVectorizer
+from resource_mapping.step_02_resource_graph.graph_builder import ResourceGraphBuilder
+from resource_mapping.step_03_task_expression.task_vectorizer import TaskVectorizer
+from resource_mapping.step_04_candidate_gnn_matching.model import TaskConditionedResourceMatcher
 
 
 def test_model_forward_outputs_batch_logits() -> None:

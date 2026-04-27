@@ -7,12 +7,12 @@ from pathlib import Path
 
 import torch
 
-from resource_mapping.candidate_generator import CandidateGenerator
-from resource_mapping.graph_builder import ResourceGraphBuilder
-from resource_mapping.io_utils import get_device, load_json, load_yaml, resolve_path, save_json
-from resource_mapping.model import TaskConditionedResourceMatcher
-from resource_mapping.task_vectorizer import TaskVectorizer
-from resource_mapping.verify import ResourceVerifier
+from resource_mapping.step_01_resource_description.io_utils import get_device, load_json, load_yaml, resolve_path, save_json
+from resource_mapping.step_02_resource_graph.graph_builder import ResourceGraphBuilder
+from resource_mapping.step_03_task_expression.task_vectorizer import TaskVectorizer
+from resource_mapping.step_04_candidate_gnn_matching.candidate_generator import CandidateGenerator
+from resource_mapping.step_04_candidate_gnn_matching.model import TaskConditionedResourceMatcher
+from resource_mapping.step_05_ranking_verification.verify import ResourceVerifier
 
 
 def main() -> None:

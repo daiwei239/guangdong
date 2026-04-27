@@ -7,8 +7,8 @@ from typing import Any
 import torch
 from torch.utils.data import Dataset
 
-from resource_mapping.graph_builder import ResourceGraphBuilder
-from resource_mapping.task_vectorizer import TaskVectorizer
+from resource_mapping.step_02_resource_graph.graph_builder import ResourceGraphBuilder
+from resource_mapping.step_03_task_expression.task_vectorizer import TaskVectorizer
 
 
 class CandidateDataset(Dataset):

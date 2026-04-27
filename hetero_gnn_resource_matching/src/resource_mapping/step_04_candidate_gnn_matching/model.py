@@ -9,7 +9,7 @@ from torch import nn
 from torch_geometric.data import HeteroData
 from torch_geometric.nn import HGTConv
 
-from resource_mapping.constants import NODE_TYPES
+from resource_mapping.step_01_resource_description.constants import NODE_TYPES
 
 
 class ResourceHGTEncoder(nn.Module):

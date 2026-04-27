@@ -87,7 +87,7 @@ python data/synthetic/generate_synthetic_data.py --train 1000 --val 200 --test 2
 ## 训练
 
 ```bash
-python -m resource_mapping.train --config configs/default.yaml
+python -m resource_mapping.step_04_candidate_gnn_matching.train --config configs/default.yaml
 ```
 
 训练使用 BCE + pairwise ranking loss，并保存最佳模型到：
@@ -99,7 +99,7 @@ outputs/checkpoints/best_model.pt
 ## 推理
 
 ```bash
-python -m resource_mapping.infer --config configs/default.yaml --checkpoint outputs/checkpoints/best_model.pt --task_id task_0001 --top_k 5
+python -m resource_mapping.step_05_ranking_verification.infer --config configs/default.yaml --checkpoint outputs/checkpoints/best_model.pt --task_id task_0001 --top_k 5
 ```
 
 结果写入：
@@ -113,7 +113,7 @@ outputs/topk_results.json
 ## 评估
 
 ```bash
-python -m resource_mapping.evaluate --config configs/default.yaml --checkpoint outputs/checkpoints/best_model.pt
+python -m resource_mapping.step_05_ranking_verification.evaluate --config configs/default.yaml --checkpoint outputs/checkpoints/best_model.pt
 ```
 
 输出 `outputs/evaluation.json`，指标包括 Top-1、Top-5、MRR、QoS 满足率、平均 GNN 推理时间、约束满足率、AUC、Precision、Recall、F1。
@@ -123,7 +123,7 @@ python -m resource_mapping.evaluate --config configs/default.yaml --checkpoint o
 评估和推理完成后可以生成一个静态 HTML 报告：
 
 ```bash
-python -m resource_mapping.visualize --config configs/default.yaml
+python -m resource_mapping.step_05_ranking_verification.visualize --config configs/default.yaml
 ```
 
 报告写入：
@@ -139,7 +139,7 @@ outputs/evaluation_report.html
 训练出 `outputs/checkpoints/best_model.pt` 后，可以启动一个本地 Web 页面，直接输入任务需求并查看候选子网生成、GNN 打分排序和规则验证结果：
 
 ```bash
-python -m resource_mapping.web_demo --config configs/default.yaml --port 8008
+python -m resource_mapping.step_05_ranking_verification.web_demo --config configs/default.yaml --port 8008
 ```
 
 浏览器打开：

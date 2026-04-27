@@ -8,7 +8,7 @@ from typing import Any
 import torch
 from torch_geometric.data import HeteroData
 
-from resource_mapping.constants import EDGE_TYPES, FEATURE_FIELDS, NODE_TYPES
+from resource_mapping.step_01_resource_description.constants import EDGE_TYPES, FEATURE_FIELDS, NODE_TYPES
 
 
 class ResourceGraphBuilder:
