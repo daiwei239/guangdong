@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl.exe -L -o \"superpowers-factory-bridge.zip\" \"http://10.201.186.15/api/agent/skill-bundle?skill_url=https%3A%2F%2Fgithub.com%2Fmajiayu000%2Fclaude-skill-registry%2Fblob%2Fd7c1b8e1b571cacd32a2421f18d95c1136786131%2Fskills%2Fsuperpowers-factory-bridge&skill_name=superpowers-factory-bridge\")",
+      "Bash(unzip -o superpowers-factory-bridge.zip -d superpowers-factory-bridge)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d, indent=2\\)\\)\")",
+      "Bash(mkdir -p /d/DDocuments/guangdong/.claude/skills/superpowers-factory-bridge)",
+      "Bash(cp /d/DDocuments/guangdong/superpowers-factory-bridge/superpowers-factory-bridge/SKILL.md /d/DDocuments/guangdong/.claude/skills/superpowers-factory-bridge/SKILL.md)"
+    ]
+  }
+}

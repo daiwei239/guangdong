@@ -1,0 +1,30 @@
+
+> hetero-gnn-demo@0.0.0 dev
+> vite --host 0.0.0.0 --port 5173
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m305[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.126.1:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.127.1:[1m5173[22m/[39m
+  [32m➜[39m  [1mNetwork[22m: [36mhttp://10.203.171.229:[1m5173[22m/[39m
+[2m00:12:57[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:20:11[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:23:24[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:27:48[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:31:24[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:35:55[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:39:48[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:46:13[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:50:18[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:55:03[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m00:58:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:01:56[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:02:12[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:06:01[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:14:00[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:16:45[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:18:11[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:23:54[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
+[2m01:26:37[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/HeterogeneousResourceMappingPage.tsx, /src/index.css[22m
