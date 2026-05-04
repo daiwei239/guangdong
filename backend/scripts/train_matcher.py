@@ -57,6 +57,8 @@ def main() -> None:
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3)
     criterion = nn.BCEWithLogitsLoss()
     samples = build_mock_training_batch(num_samples=10)
+    models_dir = PROJECT_ROOT / "models"
+    models_dir.mkdir(parents=True, exist_ok=True)
 
     model.train()
     for epoch in range(3):
@@ -69,6 +71,20 @@ def main() -> None:
             optimizer.step()
             total_loss += float(loss.item())
         print({"epoch": epoch + 1, "avg_loss": round(total_loss / len(samples), 4)})
+
+    torch.save(
+        {
+            "model_state_dict": model.state_dict(),
+            "resource_encoder_state_dict": model.resource_encoder.state_dict(),
+            "resource_encoder_edge_types": list(model.resource_encoder.configured_edge_types),
+            "task_encoder_state_dict": model.task_encoder.state_dict(),
+            "scorer_state_dict": model.scorer.state_dict(),
+            "optimizer_state_dict": optimizer.state_dict(),
+            "epoch": epoch,
+            "loss": total_loss / len(samples),
+        },
+        models_dir / "matcher_checkpoint.pt",
+    )
 
 
 if __name__ == "__main__":

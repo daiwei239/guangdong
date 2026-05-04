@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import networkx as nx
@@ -17,6 +18,7 @@ class MatchingService:
         self.finder = BeamSearchSubgraphFinder()
         self._results = {}
         self._encoding_artifacts = {}
+        self.checkpoint_path = Path(__file__).resolve().parents[2] / "models" / "matcher_checkpoint.pt"
         self.resource_encoder = ResourceGraphEncoder(
             input_dims=RESOURCE_INPUT_DIMS,
             hidden_dim=64,
@@ -26,6 +28,7 @@ class MatchingService:
             heads=2,
             dropout=0.1,
         )
+        self._load_encoder_checkpoint()
         self.resource_encoder.eval()
 
     def match_task(
@@ -88,6 +91,31 @@ class MatchingService:
 
     def get_result(self, task_id: str) -> Optional[MatchResponseSchema]:
         return self._results.get(task_id)
+
+    def _load_encoder_checkpoint(self) -> None:
+        if not self.checkpoint_path.exists():
+            return
+        checkpoint = torch.load(self.checkpoint_path, map_location="cpu")
+        resource_encoder_state = checkpoint.get("resource_encoder_state_dict")
+        configured_edge_types = checkpoint.get("resource_encoder_edge_types") or []
+        if configured_edge_types:
+            self.resource_encoder._ensure_hetero_layers(configured_edge_types)
+        if resource_encoder_state is not None:
+            self.resource_encoder.load_state_dict(resource_encoder_state, strict=False)
+            return
+
+        full_model_state = checkpoint.get("model_state_dict")
+        if not full_model_state:
+            return
+
+        # 兼容旧格式：从完整 matcher 模型权重中过滤 resource_encoder 前缀。
+        filtered_state = {}
+        prefix = "resource_encoder."
+        for key, value in full_model_state.items():
+            if key.startswith(prefix):
+                filtered_state[key[len(prefix) :]] = value
+        if filtered_state:
+            self.resource_encoder.load_state_dict(filtered_state, strict=False)
 
     def encode_resource_graph(
         self,
