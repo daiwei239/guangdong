@@ -53,6 +53,7 @@ class MockResourceGenerator:
                 "model": random.choice(["A100", "H100", "L40S", "RTX6000"]),
                 "memory_total": random.choice([24, 40, 48, 80]),
                 "fp16_tflops": random.choice([60, 120, 180, 260]),
+                "fp32_tflops": random.choice([30, 60, 90, 120]),
                 "interconnect": random.choice(["PCIe", "NVLink"]),
             }
         if resource_type == "FPGA":
@@ -60,6 +61,8 @@ class MockResourceGenerator:
                 "model": random.choice(["XCU250", "Agilex", "Versal"]),
                 "logic_units": random.randint(600000, 3000000),
                 "dsp_blocks": random.randint(2000, 12000),
+                "bram": random.randint(2000, 16000),
+                "reconfig_time_ms": random.randint(40, 500),
             }
         if resource_type == "MEMORY":
             return {
@@ -70,6 +73,7 @@ class MockResourceGenerator:
             return {
                 "capacity_tb": random.choice([4, 8, 16, 32]),
                 "throughput_gbps": random.choice([10, 20, 40]),
+                "iops": random.choice([50000, 120000, 250000, 600000]),
                 "latency_ms": round(random.uniform(0.2, 3.0), 2),
             }
         if resource_type == "NIC":
@@ -94,6 +98,8 @@ class MockResourceGenerator:
             "queue_length": random.randint(0, 20),
             "power_watt": round(random.uniform(80, 450), 2),
             "temperature": round(random.uniform(30, 80), 2),
+            "packet_loss": round(random.uniform(0.0, 0.05), 4),
+            "congestion": round(random.uniform(0.0, 0.9), 4),
             "available": random.random() > 0.12,
         }
 

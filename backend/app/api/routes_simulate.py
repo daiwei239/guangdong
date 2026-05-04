@@ -44,10 +44,18 @@ async def simulate():
 
     pipeline_steps.append(PIPELINE_EVENTS[3])
     await websocket_service.broadcast(PIPELINE_EVENTS[3], pipeline_steps)
+    full_graph_embedding = matching_service.encode_resource_graph(resources, edges, task.task_type)
 
     pipeline_steps.append(PIPELINE_EVENTS[4])
     await websocket_service.broadcast(PIPELINE_EVENTS[4], pipeline_steps)
-    match_result = matching_service.match_task(task, resources, edges, graph, pipeline_steps)
+    match_result = matching_service.match_task(
+        task,
+        resources,
+        edges,
+        graph,
+        pipeline_steps,
+        full_graph_embedding=full_graph_embedding,
+    )
 
     pipeline_steps.append(PIPELINE_EVENTS[5])
     await websocket_service.broadcast(PIPELINE_EVENTS[5], pipeline_steps)
