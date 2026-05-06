@@ -16,13 +16,13 @@ except ImportError:  # pragma: no cover - fallback path
 
 RESOURCE_TYPES = ["CPU", "GPU", "FPGA", "MEMORY", "STORAGE", "NIC", "SWITCH"]
 RESOURCE_INPUT_DIMS: Dict[str, int] = {
-    "CPU": 6,
-    "GPU": 10,
-    "FPGA": 8,
-    "MEMORY": 5,
-    "STORAGE": 6,
-    "NIC": 6,
-    "SWITCH": 5,
+    "CPU": 8,
+    "GPU": 12,
+    "FPGA": 10,
+    "MEMORY": 7,
+    "STORAGE": 8,
+    "NIC": 8,
+    "SWITCH": 7,
 }
 EDGE_ATTR_DIM = 5
 TASK_TYPES = ["计算密集型", "数据密集型", "通信密集型", "混合型"]
@@ -60,6 +60,16 @@ def _bool_flag(value: object) -> float:
     return 1.0 if bool(value) else 0.0
 
 
+def _extract_numeric_suffix(value: object, default: float = 0.0) -> float:
+    if value is None:
+        return default
+    text = str(value)
+    digits = "".join(char for char in text if char.isdigit())
+    if not digits:
+        return default
+    return float(digits)
+
+
 class ResourceFeatureBuilder:
     """将不同资源类型的原始属性构造成归一化特征向量。"""
 
@@ -86,6 +96,7 @@ class ResourceFeatureBuilder:
             _normalize(dynamic.get("queue_length", 0), 32.0),
             _normalize(dynamic.get("power_watt", 0), 500.0),
             _bool_flag(dynamic.get("available", False)),
+            *self._build_topo_features(resource),
         ]
 
     def _build_gpu_features(self, resource: ResourceNodeRead) -> List[float]:
@@ -106,6 +117,7 @@ class ResourceFeatureBuilder:
             interconnect_score,
             _normalize(dynamic.get("queue_length", 0), 32.0),
             _bool_flag(dynamic.get("available", False)),
+            *self._build_topo_features(resource),
         ]
 
     def _build_fpga_features(self, resource: ResourceNodeRead) -> List[float]:
@@ -120,6 +132,7 @@ class ResourceFeatureBuilder:
             _normalize(dynamic.get("power_watt", 0), 500.0),
             _normalize(dynamic.get("temperature", 0), 100.0),
             _bool_flag(dynamic.get("available", False)),
+            *self._build_topo_features(resource),
         ]
 
     def _build_memory_features(self, resource: ResourceNodeRead) -> List[float]:
@@ -133,6 +146,7 @@ class ResourceFeatureBuilder:
             _normalize(static.get("bandwidth_gbps", 0), 800.0),
             _normalize(dynamic.get("utilization", 0), 100.0),
             _bool_flag(dynamic.get("available", False)),
+            *self._build_topo_features(resource),
         ]
 
     def _build_storage_features(self, resource: ResourceNodeRead) -> List[float]:
@@ -147,6 +161,7 @@ class ResourceFeatureBuilder:
             _normalize(static.get("iops", 0), 5000000.0),
             _normalize(static.get("latency_ms", 0), 10.0),
             _bool_flag(dynamic.get("available", False)),
+            *self._build_topo_features(resource),
         ]
 
     def _build_nic_features(self, resource: ResourceNodeRead) -> List[float]:
@@ -159,6 +174,7 @@ class ResourceFeatureBuilder:
             _normalize(dynamic.get("utilization", 0), 100.0),
             _normalize(dynamic.get("packet_loss", 0), 1.0),
             _bool_flag(dynamic.get("available", False)),
+            *self._build_topo_features(resource),
         ]
 
     def _build_switch_features(self, resource: ResourceNodeRead) -> List[float]:
@@ -170,7 +186,19 @@ class ResourceFeatureBuilder:
             _normalize(static.get("latency_ms", 0), 10.0),
             _normalize(dynamic.get("utilization", 0), 100.0),
             _normalize(dynamic.get("congestion", 0), 1.0),
+            *self._build_topo_features(resource),
         ]
+
+    def _build_topo_features(self, resource: ResourceNodeRead) -> List[float]:
+        topo = getattr(resource, "topo_context", {}) or {}
+        rack_value = topo.get("rack_id") or topo.get("rack_index") or resource.host_id
+        tier_value = topo.get("network_tier")
+        if tier_value is None:
+            hop_level = topo.get("hop_level")
+            tier_value = hop_level if hop_level is not None else 1.0
+        rack_norm = _normalize(_extract_numeric_suffix(rack_value, default=1.0), 16.0, default=1.0)
+        tier_norm = _normalize(float(tier_value), 4.0, default=1.0)
+        return [rack_norm, tier_norm]
 
     def build_edge_attr(self, edge: ResourceEdgeRead) -> List[float]:
         payload = edge.model_dump() if hasattr(edge, "model_dump") else edge.dict()

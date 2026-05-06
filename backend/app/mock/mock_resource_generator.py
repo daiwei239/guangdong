@@ -27,6 +27,7 @@ class MockResourceGenerator:
     def _build_resource(self, resource_type: str, index: int) -> ResourceNodeRead:
         cluster_id = "cluster-{0}".format(random.randint(1, 3))
         host_id = "host-{0}".format(random.randint(1, 12))
+        topo_context = self._topo_context(cluster_id, host_id)
         now = datetime.utcnow()
         return ResourceNodeRead(
             id=generate_id(resource_type.lower()),
@@ -34,6 +35,7 @@ class MockResourceGenerator:
             type=resource_type,
             cluster_id=cluster_id,
             host_id=host_id,
+            topo_context=topo_context,
             static_attrs=self._static_attrs(resource_type),
             dynamic_state=self._dynamic_state(resource_type),
             semantic_tags=self._semantic_tags(resource_type),
@@ -114,3 +116,18 @@ class MockResourceGenerator:
             "SWITCH": ["fabric", "topology"],
         }
         return base[resource_type]
+
+    def _topo_context(self, cluster_id: str, host_id: str) -> Dict:
+        cluster_num = int(cluster_id.split("-")[-1])
+        host_num = int(host_id.split("-")[-1])
+        rack_num = ((host_num - 1) // 4) + 1
+        network_tier = 1 if rack_num <= 2 else 2
+        zone_num = 1 if cluster_num <= 2 else 2
+        return {
+            "server_id": host_id,
+            "rack_id": "rack-{0}".format(rack_num),
+            "cluster_id": cluster_id,
+            "zone_id": "zone-{0}".format(zone_num),
+            "network_tier": network_tier,
+            "hop_level": random.randint(1, 4),
+        }

@@ -14,6 +14,7 @@ class ResourceNodeORM(Base):
     type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     cluster_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     host_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    topo_context: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     static_attrs: Mapped[dict] = mapped_column(JSON, nullable=False)
     dynamic_state: Mapped[dict] = mapped_column(JSON, nullable=False)
     semantic_tags: Mapped[list] = mapped_column(JSON, nullable=False, default=list)

@@ -1,14 +1,13 @@
-from typing import Dict, List, Sequence, Set, Tuple
+from typing import List, Sequence
 
 import networkx as nx
 
 from app.algorithms.rule_filter import RuleFilter
-from app.schemas.resource_schema import ResourceNodeRead
 from app.schemas.task_schema import TaskProfileRead
 
 
 class BeamSearchSubgraphFinder:
-    """使用简化 Beam Search 搜索候选资源子网。"""
+    """基于规则筛选与 Beam Search 的候选子网搜索器。"""
 
     def __init__(self, beam_width: int = 5, target_candidates: int = 3) -> None:
         self.beam_width = beam_width
@@ -18,7 +17,7 @@ class BeamSearchSubgraphFinder:
     def search(
         self,
         task: TaskProfileRead,
-        resources: Sequence[ResourceNodeRead],
+        resources: Sequence,
         graph: nx.Graph,
     ) -> List[List[str]]:
         eligible = self.rule_filter.filter_resources(task, resources)
@@ -76,7 +75,31 @@ class BeamSearchSubgraphFinder:
                 edge_bonus += float(attrs.get("weight", 1.0)) * 8.0
                 edge_bonus += float(attrs.get("bandwidth_gbps", 0.0)) * 0.03
                 edge_bonus -= float(attrs.get("latency_ms", 0.0)) * 0.4
+                edge_bonus += self._topology_affinity(graph, node_id, neighbor)
         return edge_bonus
+
+    def _topology_affinity(self, graph: nx.Graph, source: str, target: str) -> float:
+        """优先扩展与当前候选在拓扑上更接近的节点。"""
+        source_topo = (graph.nodes[source] or {}).get("topo_context", {})
+        target_topo = (graph.nodes[target] or {}).get("topo_context", {})
+        if not source_topo or not target_topo:
+            return 0.0
+
+        score = 0.0
+        if source_topo.get("server_id") == target_topo.get("server_id"):
+            score += 8.0
+        elif source_topo.get("rack_id") == target_topo.get("rack_id"):
+            score += 5.0
+        elif source_topo.get("cluster_id") == target_topo.get("cluster_id"):
+            score += 2.5
+
+        source_tier = float(source_topo.get("network_tier", 3))
+        target_tier = float(target_topo.get("network_tier", 3))
+        source_hop = float(source_topo.get("hop_level", 4))
+        target_hop = float(target_topo.get("hop_level", 4))
+        score += max(0.0, 3.0 - abs(source_tier - target_tier) * 1.5)
+        score += max(0.0, 2.0 - abs(source_hop - target_hop) * 0.5)
+        return score
 
     def _ensure_min_size(self, graph: nx.Graph, node_ids: List[str], minimum_size: int, maximum_size: int) -> List[str]:
         selected = list(node_ids)

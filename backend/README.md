@@ -293,6 +293,41 @@ concat(z_subgraph, z_task)
 pip install -r requirements.txt
 ```
 
+## 本机连接 Docker 中的数据库
+
+如果你是在本机直接运行 `uvicorn`，而 PostgreSQL / Neo4j 在 Docker 里，建议使用 `.env` 配置本机路由：
+
+```env
+DATABASE_URL=postgresql+psycopg://guangdong_user:guangdong_pass@localhost:5432/guangdong_resource_mapping
+NEO4J_ENABLED=true
+NEO4J_URI=bolt://localhost:7687
+NEO4J_USER=neo4j
+NEO4J_PASSWORD=guangdong_pass
+```
+
+项目里已提供模板：
+
+- [\.env.example](D:/DDocuments/guangdong/backend/.env.example)
+
+这种场景下不要使用 `postgres` / `neo4j` 作为主机名，那是给 Docker 容器内部互联用的。
+
+## Docker Compose 变量化配置
+
+`docker-compose.yml` 里的动态项已经提取到环境变量中，包括：
+
+- `POSTGRES_DB`
+- `POSTGRES_USER`
+- `POSTGRES_PASSWORD`
+- `POSTGRES_PORT`
+- `NEO4J_USER`
+- `NEO4J_PASSWORD`
+- `NEO4J_HTTP_PORT`
+- `NEO4J_BOLT_PORT`
+- `REDIS_PORT`
+- `BACKEND_PORT`
+
+也就是说，后续如果你要改数据库名、账号、密码或端口，优先修改 `.env`，不需要再直接改 `docker-compose.yml`。
+
 如果环境里没有 `torch` / `torch_geometric`，可按你的 CUDA 版本安装，例如：
 
 ```bash

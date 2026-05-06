@@ -23,15 +23,15 @@ class Settings(BaseSettings):
     api_prefix: str = "/api"
 
     database_url: str = "sqlite:///./semi_real_backend.db"
-    postgres_url: str = "postgresql+psycopg://postgres:postgres@postgres:5432/resource_graph"
+    postgres_url: str = "postgresql+psycopg://guangdong_user:guangdong_pass@localhost:5432/guangdong_resource_mapping"
 
     neo4j_enabled: bool = False
-    neo4j_uri: str = "bolt://neo4j:7687"
+    neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
-    neo4j_password: str = "password"
+    neo4j_password: str = "guangdong_pass"
 
     redis_enabled: bool = False
-    redis_url: str = "redis://redis:6379/0"
+    redis_url: str = "redis://localhost:6379/0"
 
     cors_origins: List[str] = ["*"]
 

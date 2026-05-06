@@ -1,4 +1,4 @@
-from typing import Dict, List, Sequence
+from typing import List, Sequence
 
 from app.schemas.resource_schema import ResourceNodeRead
 from app.schemas.task_schema import TaskProfileRead
@@ -13,7 +13,7 @@ TASK_TYPE_PRIORITY = {
 
 
 class RuleFilter:
-    """根据任务约束和资源类型偏好做粗筛。"""
+    """规则筛选器：负责资源粗筛与候选种子打分。"""
 
     def filter_resources(self, task: TaskProfileRead, resources: Sequence[ResourceNodeRead]) -> List[ResourceNodeRead]:
         preferred_types = TASK_TYPE_PRIORITY.get(task.task_type, [])
@@ -40,4 +40,20 @@ class RuleFilter:
             score += float(resource.static_attrs.get("bandwidth_gbps", 0)) * 0.05
         if resource.type == "STORAGE":
             score += float(resource.static_attrs.get("throughput_gbps", 0)) * 0.12
+        score += self._topology_bonus(task, resource)
+        return score
+
+    def _topology_bonus(self, task: TaskProfileRead, resource: ResourceNodeRead) -> float:
+        """拓扑上下文加分：优先更低网络层级、更少跳数的资源。"""
+        topo_context = resource.topo_context or {}
+        network_tier = float(topo_context.get("network_tier", 3))
+        hop_level = float(topo_context.get("hop_level", 4))
+
+        score = max(0.0, 8.0 - max(network_tier - 1.0, 0.0) * 4.0)
+        score += max(0.0, 6.0 - max(hop_level - 1.0, 0.0) * 1.5)
+
+        if task.constraints.get("prefer_low_latency"):
+            score += max(0.0, 8.0 - network_tier * 2.0 - hop_level * 0.8)
+        if task.constraints.get("prefer_same_rack"):
+            score += 2.0 if topo_context.get("rack_id") else 0.0
         return score

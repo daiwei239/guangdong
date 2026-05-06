@@ -33,6 +33,7 @@ def test_feature_builder_fills_missing_fields_with_defaults() -> None:
     gpu = next(resource for resource in resources if resource.type == "GPU")
     gpu.static_attrs.pop("memory_total", None)
     gpu.dynamic_state.pop("memory_free", None)
+    gpu.topo_context = {}
 
     vector = ResourceFeatureBuilder().build_feature_vector(gpu)
 
@@ -48,3 +49,11 @@ def test_build_raw_feature_tensors_groups_resources_by_type() -> None:
     assert set(x_dict) == set(RESOURCE_INPUT_DIMS)
     assert x_dict["CPU"].shape[1] == RESOURCE_INPUT_DIMS["CPU"]
     assert x_dict["GPU"].shape[1] == RESOURCE_INPUT_DIMS["GPU"]
+
+
+def test_mock_resources_include_topo_context() -> None:
+    resource = MockResourceGenerator().generate_resources()[0]
+
+    assert "server_id" in resource.topo_context
+    assert "rack_id" in resource.topo_context
+    assert "network_tier" in resource.topo_context

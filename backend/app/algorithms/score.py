@@ -1,3 +1,4 @@
+from collections import Counter
 from typing import Dict, Sequence
 
 import networkx as nx
@@ -10,7 +11,7 @@ from app.utils.normalizer import clamp
 
 
 class ScoreCalculator:
-    """规则评分器，保留容量/性能/拓扑/成本分解函数供当前阶段继续使用。"""
+    """规则评分器：计算容量、性能、拓扑、QoS 与综合成本。"""
 
     def __init__(
         self,
@@ -96,10 +97,12 @@ class ScoreCalculator:
         else:
             avg_latency = 10.0
             avg_bandwidth = 0.0
+        topo_context_bonus = self._compute_topology_context_bonus(subgraph)
         return clamp(
-            (100.0 if nx.is_connected(subgraph) else 40.0)
+            (65.0 if nx.is_connected(subgraph) else 30.0)
             + min(avg_bandwidth / 4.0, 25.0)
             - min(avg_latency * 4.0, 25.0)
+            + topo_context_bonus
         )
 
     def compute_qos_score(
@@ -113,11 +116,13 @@ class ScoreCalculator:
         else:
             avg_latency = 10.0
         total_queue = sum(float(node.dynamic_state.get("queue_length", 0)) for node in resource_nodes)
+        same_rack_bonus = self._same_rack_ratio(subgraph) * 12.0 if task.constraints.get("prefer_same_rack") else 0.0
         return clamp(
             100.0
             - min(avg_latency / max(task.constraints.get("max_network_latency_ms", 1), 1) * 35.0, 35.0)
             - min(total_queue * 1.2, 35.0)
             + min(task.priority * 4.0, 20.0)
+            + same_rack_bonus
         )
 
     def compute_cost(
@@ -132,7 +137,8 @@ class ScoreCalculator:
         else:
             avg_latency = 10.0
             avg_bandwidth = 0.0
-        communication_cost = clamp(max(0.0, avg_latency * 10.0 - avg_bandwidth * 0.04))
+        topo_penalty = self._compute_topology_penalty(subgraph)
+        communication_cost = clamp(max(0.0, avg_latency * 10.0 - avg_bandwidth * 0.04) + topo_penalty)
         energy_cost = clamp(sum(float(node.dynamic_state.get("power_watt", 0)) for node in resource_nodes) / max(task.energy_limit, 1) * 100.0)
         load_cost = clamp(sum(float(node.dynamic_state.get("utilization", 0)) for node in resource_nodes) / max(len(resource_nodes), 1))
         cost = clamp(0.4 * communication_cost + 0.3 * energy_cost + 0.3 * load_cost)
@@ -164,7 +170,7 @@ class ScoreCalculator:
 
         recommendation = "当前最优资源子网满足任务容量、性能、拓扑与 QoS 约束，建议提交调度器进行任务部署。"
         if not all([capacity_ok, performance_ok, topology_ok, qos_ok]):
-            recommendation = "当前最优资源子网存在部分约束风险，建议调整任务需求或重新生成资源快照后再提交。"
+            recommendation = "当前候选资源子网仍存在容量、性能、拓扑或 QoS 短板，建议继续搜索或调整任务约束后再提交调度。"
 
         return VerificationResultSchema(
             capacity_ok=capacity_ok,
@@ -173,3 +179,47 @@ class ScoreCalculator:
             qos_ok=qos_ok,
             recommendation=recommendation,
         )
+
+    def _compute_topology_context_bonus(self, subgraph: nx.Graph) -> float:
+        if subgraph.number_of_nodes() == 0:
+            return 0.0
+        same_server_ratio = self._shared_context_ratio(subgraph, "server_id")
+        same_rack_ratio = self._shared_context_ratio(subgraph, "rack_id")
+        same_cluster_ratio = self._shared_context_ratio(subgraph, "cluster_id")
+        avg_network_tier = self._average_topology_metric(subgraph, "network_tier", default=3.0)
+        avg_hop_level = self._average_topology_metric(subgraph, "hop_level", default=4.0)
+
+        bonus = same_server_ratio * 12.0 + same_rack_ratio * 10.0 + same_cluster_ratio * 6.0
+        bonus += max(0.0, 8.0 - avg_network_tier * 3.0)
+        bonus += max(0.0, 8.0 - avg_hop_level * 1.8)
+        return bonus
+
+    def _compute_topology_penalty(self, subgraph: nx.Graph) -> float:
+        avg_network_tier = self._average_topology_metric(subgraph, "network_tier", default=3.0)
+        avg_hop_level = self._average_topology_metric(subgraph, "hop_level", default=4.0)
+        same_rack_ratio = self._same_rack_ratio(subgraph)
+        return max(0.0, avg_network_tier * 6.0 + avg_hop_level * 4.0 - same_rack_ratio * 8.0)
+
+    def _same_rack_ratio(self, subgraph: nx.Graph) -> float:
+        return self._shared_context_ratio(subgraph, "rack_id")
+
+    def _shared_context_ratio(self, subgraph: nx.Graph, key: str) -> float:
+        values = []
+        for _, data in subgraph.nodes(data=True):
+            topo_context = data.get("topo_context", {}) or {}
+            value = topo_context.get(key)
+            if value:
+                values.append(value)
+        if not values:
+            return 0.0
+        counts = Counter(values)
+        return counts.most_common(1)[0][1] / max(subgraph.number_of_nodes(), 1)
+
+    def _average_topology_metric(self, subgraph: nx.Graph, key: str, default: float) -> float:
+        values = []
+        for _, data in subgraph.nodes(data=True):
+            topo_context = data.get("topo_context", {}) or {}
+            values.append(float(topo_context.get(key, default)))
+        if not values:
+            return default
+        return sum(values) / len(values)

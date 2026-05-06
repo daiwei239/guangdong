@@ -15,6 +15,7 @@ class ResourceNodeBase(BaseModel):
     type: str
     cluster_id: str
     host_id: str
+    topo_context: Dict
     static_attrs: Dict
     dynamic_state: Dict
     semantic_tags: List[str]

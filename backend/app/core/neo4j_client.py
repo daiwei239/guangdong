@@ -1,4 +1,5 @@
-from typing import Dict, Iterable, List, Optional
+import atexit
+from typing import Dict, Iterable
 
 try:
     from neo4j import GraphDatabase
@@ -9,7 +10,7 @@ from app.core.config import get_settings
 
 
 class Neo4jGraphClient:
-    """Neo4j 可选客户端，不可用时自动降级为 no-op。"""
+    """Neo4j 客户端：不可用时自动降级为 no-op。"""
 
     def __init__(self) -> None:
         settings = get_settings()
@@ -21,6 +22,7 @@ class Neo4jGraphClient:
                     settings.neo4j_uri,
                     auth=(settings.neo4j_user, settings.neo4j_password),
                 )
+                atexit.register(self.close)
             except Exception:
                 self.enabled = False
                 self._driver = None
@@ -40,6 +42,7 @@ class Neo4jGraphClient:
             n.type = $type,
             n.cluster_id = $cluster_id,
             n.host_id = $host_id,
+            n.topo_context = $topo_context,
             n.static_attrs = $static_attrs,
             n.dynamic_state = $dynamic_state,
             n.semantic_tags = $semantic_tags
@@ -74,3 +77,10 @@ class Neo4jGraphClient:
     def close(self) -> None:
         if self._driver:
             self._driver.close()
+            self._driver = None
+
+    def __del__(self) -> None:  # pragma: no cover - 析构阶段不稳定，不纳入测试覆盖
+        try:
+            self.close()
+        except Exception:
+            pass

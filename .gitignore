@@ -66,3 +66,8 @@ docs/superpowers/
 *.bak
 *.tmp
 *.cache
+
+projects/**
+./backer
+backend/docs/**
+

@@ -1,16 +1,26 @@
+import logging
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import networkx as nx
 import torch
+from sqlalchemy import delete, desc, select
+from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 
 from app.algorithms.beam_search import BeamSearchSubgraphFinder
 from app.algorithms.feature_builder import RESOURCE_INPUT_DIMS, build_mock_heterodata_from_resources
 from app.algorithms.gnn_encoder import ResourceGraphEncoder
+from app.core.database import SessionLocal
+from app.models.match import CandidateSubgraphORM, MatchResultORM
 from app.schemas.match_schema import MatchResponseSchema
 from app.schemas.resource_schema import ResourceEdgeRead, ResourceNodeRead
 from app.schemas.task_schema import TaskProfileRead
 from app.services.scoring_service import scoring_service
+from app.utils.id_generator import generate_id
+from app.utils.pydantic_compat import model_dump_compat
+
+
+logger = logging.getLogger(__name__)
 
 
 class MatchingService:
@@ -87,10 +97,14 @@ class MatchingService:
             "candidate_embeddings": candidate_embeddings,
             "top1_embedding": candidate_embeddings.get(self._candidate_signature(top1.nodes), []),
         }
+        self._persist_result(result)
         return result
 
     def get_result(self, task_id: str) -> Optional[MatchResponseSchema]:
-        return self._results.get(task_id)
+        result = self._results.get(task_id)
+        if result is not None:
+            return result
+        return self._load_result_from_db(task_id)
 
     def _load_encoder_checkpoint(self) -> None:
         if not self.checkpoint_path.exists():
@@ -101,7 +115,7 @@ class MatchingService:
         if configured_edge_types:
             self.resource_encoder._ensure_hetero_layers(configured_edge_types)
         if resource_encoder_state is not None:
-            self.resource_encoder.load_state_dict(resource_encoder_state, strict=False)
+            self._safe_load_state_dict(resource_encoder_state)
             return
 
         full_model_state = checkpoint.get("model_state_dict")
@@ -115,7 +129,22 @@ class MatchingService:
             if key.startswith(prefix):
                 filtered_state[key[len(prefix) :]] = value
         if filtered_state:
-            self.resource_encoder.load_state_dict(filtered_state, strict=False)
+            self._safe_load_state_dict(filtered_state)
+
+    def _safe_load_state_dict(self, state_dict: Dict[str, torch.Tensor]) -> None:
+        current_state = self.resource_encoder.state_dict()
+        compatible_state = {}
+        for key, value in state_dict.items():
+            current_value = current_state.get(key)
+            if current_value is None:
+                continue
+            if isinstance(current_value, (UninitializedParameter, UninitializedBuffer)):
+                continue
+            if current_value.shape != value.shape:
+                continue
+            compatible_state[key] = value
+        if compatible_state:
+            self.resource_encoder.load_state_dict(compatible_state, strict=False)
 
     def encode_resource_graph(
         self,
@@ -148,6 +177,113 @@ class MatchingService:
 
     def _candidate_signature(self, node_ids: Sequence[str]) -> Tuple[str, ...]:
         return tuple(sorted(node_ids))
+
+    def _persist_result(self, result: MatchResponseSchema) -> None:
+        """将候选子图与最终匹配结果写入数据库。"""
+        try:
+            with SessionLocal() as session:
+                session.execute(delete(CandidateSubgraphORM).where(CandidateSubgraphORM.task_id == result.task_id))
+                session.execute(delete(MatchResultORM).where(MatchResultORM.task_id == result.task_id))
+                session.add_all(
+                    [
+                        CandidateSubgraphORM(
+                            id=candidate.subgraph_id,
+                            task_id=result.task_id,
+                            rank=candidate.rank,
+                            nodes=candidate.nodes,
+                            edges=candidate.edges,
+                            score=candidate.final_score,
+                            score_breakdown={
+                                "capacity_score": candidate.capacity_score,
+                                "performance_score": candidate.performance_score,
+                                "topology_score": candidate.topology_score,
+                                "qos_score": candidate.qos_score,
+                                "communication_cost": candidate.communication_cost,
+                                "energy_cost": candidate.energy_cost,
+                                "load_cost": candidate.load_cost,
+                                "final_score": candidate.final_score,
+                            },
+                            is_top1=candidate.is_top1,
+                        )
+                        for candidate in result.candidates
+                    ]
+                )
+                session.add(
+                    MatchResultORM(
+                        id=generate_id("match"),
+                        task_id=result.task_id,
+                        top1_subgraph_id=result.top1.subgraph_id,
+                        verification=model_dump_compat(result.verification),
+                        top1_score=result.top1.final_score,
+                        pipeline_steps=result.pipeline_steps,
+                    )
+                )
+                session.commit()
+        except Exception as exc:  # pragma: no cover
+            logger.warning("failed to persist match result: %s", exc)
+
+    def _load_result_from_db(self, task_id: str) -> Optional[MatchResponseSchema]:
+        try:
+            with SessionLocal() as session:
+                match_row = (
+                    session.execute(
+                        select(MatchResultORM).where(MatchResultORM.task_id == task_id).order_by(desc(MatchResultORM.created_at))
+                    )
+                    .scalars()
+                    .first()
+                )
+                candidate_rows = (
+                    session.execute(
+                        select(CandidateSubgraphORM).where(CandidateSubgraphORM.task_id == task_id).order_by(CandidateSubgraphORM.rank)
+                    )
+                    .scalars()
+                    .all()
+                )
+        except Exception as exc:  # pragma: no cover
+            logger.warning("failed to load match result from database: %s", exc)
+            return None
+
+        if match_row is None or not candidate_rows:
+            return None
+
+        candidates = []
+        top1 = None
+        for row in candidate_rows:
+            score_breakdown = row.score_breakdown or {}
+            candidate = {
+                "subgraph_id": row.id,
+                "rank": row.rank,
+                "nodes": row.nodes or [],
+                "edges": row.edges or [],
+                "score": row.score,
+                "capacity_score": score_breakdown.get("capacity_score", 0.0),
+                "performance_score": score_breakdown.get("performance_score", 0.0),
+                "topology_score": score_breakdown.get("topology_score", 0.0),
+                "qos_score": score_breakdown.get("qos_score", 0.0),
+                "communication_cost": score_breakdown.get("communication_cost", 0.0),
+                "energy_cost": score_breakdown.get("energy_cost", 0.0),
+                "load_cost": score_breakdown.get("load_cost", 0.0),
+                "final_score": score_breakdown.get("final_score", row.score),
+                "is_top1": row.is_top1,
+            }
+            candidates.append(candidate)
+            if row.is_top1:
+                top1 = candidate
+
+        if top1 is None:
+            top1 = dict(candidates[0])
+            top1["is_top1"] = True
+            candidates[0]["is_top1"] = True
+
+        result = MatchResponseSchema(
+            task_id=task_id,
+            candidates=candidates,
+            top1=top1,
+            verification=match_row.verification,
+            pipeline_steps=match_row.pipeline_steps or [],
+        )
+        self._results[task_id] = result
+        return result
 
 
 matching_service = MatchingService()

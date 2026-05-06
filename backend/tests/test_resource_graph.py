@@ -39,3 +39,15 @@ def test_graph_service_builds_resource_graph_with_frontend_fields() -> None:
         "is_candidate_edge",
         "is_top1_edge",
     } <= set(edge)
+
+
+def test_resource_nodes_include_topo_context_in_graph_data() -> None:
+    resources = MockResourceGenerator().generate_resources()
+    edges = MockTopologyGenerator().generate_edges(resources)
+
+    graph_service = GraphService()
+    graph = graph_service.build_networkx_graph(resources, edges)
+
+    node_id = resources[0].id
+    topo_context = graph.nodes[node_id]["topo_context"]
+    assert {"server_id", "rack_id", "cluster_id", "zone_id", "network_tier", "hop_level"} <= set(topo_context)
