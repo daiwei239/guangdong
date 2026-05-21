@@ -4,11 +4,11 @@ import torch
 from torch import Tensor, nn
 
 from app.algorithms.feature_builder import EDGE_ATTR_DIM, RESOURCE_TYPES
-from app.algorithms.feature_encoder import ResourceFeatureEncoder
+from app.algorithms.feature_encoder import ResourceFeatureEncoder, encoder_module_key
 
 try:
     from torch_geometric.nn import GATConv, HeteroConv
-except ImportError:  # pragma: no cover - fallback path
+except ImportError:  # pragma: no cover - PyG 不可用时走兜底路径
     GATConv = None
     HeteroConv = None
 
@@ -30,15 +30,27 @@ DEFAULT_RELATIONS = [
 ]
 
 
+def projection_module_key(resource_type: str) -> str:
+    return encoder_module_key(resource_type)
+
+
 class ResourceGraphEncoder(nn.Module):
-    """异构关系感知资源图编码器。"""
+    """异构关系感知资源图编码器。
+
+    编码流程：
+        按类型分组的原始特征 -> 类型专属 MLP -> HeteroConv 消息传递
+        -> 每个节点的 embedding -> 任务感知的按类型池化。
+
+    如果当前环境没有安装 PyG，本模块仍然会返回一个基于线性投影的兜底
+    embedding，这样后端和测试在没有 GPU/GNN 依赖时也可以正常运行。
+    """
 
     def __init__(
         self,
         input_dims: Dict[str, int],
         hidden_dim: int = 64,
         out_dim: int = 64,
-        edge_attr_dim: int = 5,
+        edge_attr_dim: int = EDGE_ATTR_DIM,
         num_layers: int = 2,
         heads: int = 2,
         dropout: float = 0.1,
@@ -53,8 +65,12 @@ class ResourceGraphEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.activation = nn.ReLU()
         self.feature_encoder = ResourceFeatureEncoder(input_dims, hidden_dim)
-        self.out_proj = nn.ModuleDict({resource_type: nn.Linear(hidden_dim, out_dim) for resource_type in self.input_dims})
-        self.fallback_proj = nn.ModuleDict({resource_type: nn.Linear(hidden_dim, out_dim) for resource_type in self.input_dims})
+        self.out_proj = nn.ModuleDict(
+            {projection_module_key(resource_type): nn.Linear(hidden_dim, out_dim) for resource_type in self.input_dims}
+        )
+        self.fallback_proj = nn.ModuleDict(
+            {projection_module_key(resource_type): nn.Linear(hidden_dim, out_dim) for resource_type in self.input_dims}
+        )
         self.hetero_layers: Optional[nn.ModuleList] = None
         self.configured_edge_types: List[Tuple[str, str, str]] = []
         self.last_edge_types: List[Tuple[str, str, str]] = []
@@ -103,6 +119,9 @@ class ResourceGraphEncoder(nn.Module):
             if attr.shape[0] != num_edges:
                 edge_attr_dict[edge_type] = torch.zeros((num_edges, edge_attr_dim), dtype=attr.dtype, device=attr.device)
                 continue
+            if attr.dim() != 2:
+                edge_attr_dict[edge_type] = torch.zeros((num_edges, edge_attr_dim), dtype=torch.float32, device=edge_index.device)
+                continue
             if attr.shape[1] != edge_attr_dim:
                 padded = torch.zeros((num_edges, edge_attr_dim), dtype=attr.dtype, device=attr.device)
                 width = min(edge_attr_dim, attr.shape[1])
@@ -113,6 +132,8 @@ class ResourceGraphEncoder(nn.Module):
         return edge_attr_dict
 
     def pool_subgraph(self, x_dict: Mapping[str, Tensor], task_type: Optional[str] = None) -> Tensor:
+        """将节点 embedding 池化成一个资源子网表示 z_R^k。"""
+
         type_means: Dict[str, Tensor] = {}
         for resource_type, tensor in x_dict.items():
             if tensor.numel() > 0:
@@ -130,7 +151,8 @@ class ResourceGraphEncoder(nn.Module):
         if total_weight <= 0:
             return torch.stack(list(type_means.values()), dim=0).mean(dim=0)
 
-        pooled = torch.zeros((1, self.out_dim), dtype=next(iter(type_means.values())).dtype, device=next(iter(type_means.values())).device)
+        first_tensor = next(iter(type_means.values()))
+        pooled = torch.zeros((1, self.out_dim), dtype=first_tensor.dtype, device=first_tensor.device)
         for resource_type, tensor in type_means.items():
             pooled = pooled + tensor * (present_weights[resource_type] / total_weight)
         return pooled
@@ -170,8 +192,10 @@ class ResourceGraphEncoder(nn.Module):
             if new_tensor is None:
                 base = previous_tensor
             else:
-                base = self.activation(new_tensor)
-                base = self.dropout(base)
+                if previous_tensor is not None and previous_tensor.shape == new_tensor.shape:
+                    base = previous_tensor + self.dropout(self.activation(new_tensor))
+                else:
+                    base = self.dropout(self.activation(new_tensor))
             if base is None:
                 base = torch.zeros((0, self.hidden_dim), dtype=torch.float32)
             merged[resource_type] = base
@@ -185,7 +209,7 @@ class ResourceGraphEncoder(nn.Module):
                 device = tensor.device if tensor is not None else None
                 projected[resource_type] = torch.zeros((0, self.out_dim), dtype=torch.float32, device=device)
                 continue
-            projected[resource_type] = self.out_proj[resource_type](tensor)
+            projected[resource_type] = self.out_proj[projection_module_key(resource_type)](tensor)
         return projected
 
     def _fallback_project(self, x_dict: Mapping[str, Tensor]) -> Dict[str, Tensor]:
@@ -196,5 +220,5 @@ class ResourceGraphEncoder(nn.Module):
                 device = tensor.device if tensor is not None else None
                 projected[resource_type] = torch.zeros((0, self.out_dim), dtype=torch.float32, device=device)
                 continue
-            projected[resource_type] = self.activation(self.fallback_proj[resource_type](tensor))
+            projected[resource_type] = self.activation(self.fallback_proj[projection_module_key(resource_type)](tensor))
         return projected

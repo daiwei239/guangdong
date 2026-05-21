@@ -1,5 +1,17 @@
+"""Step 2：异构资源图特征构建。
+
+本模块负责把分散、异构、动态变化的算力资源转换为向量化、类型化的图表示：
+
+    G_R(t) = (V_R, E_R, X_V(t), X_E(t), tau, phi)
+
+其中 CPU/GPU/FPGA/MEMORY/STORAGE/NIC/SWITCH 等资源被表示为带类型的节点；
+物理连接、拓扑邻接、共享竞争和依赖关系被表示为带类型的边；节点和边的属性
+都会被归一化为 tensor，供 PyTorch Geometric 的 ``HeteroData`` 或本地
+兜底结构 ``SimpleHeteroData`` 使用。
+"""
+
 from collections import defaultdict
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 import torch
 
@@ -10,7 +22,7 @@ from app.utils.normalizer import clamp
 
 try:
     from torch_geometric.data import HeteroData
-except ImportError:  # pragma: no cover - fallback path
+except ImportError:  # pragma: no cover - PyG 不可用时走兜底路径
     HeteroData = None
 
 
@@ -28,6 +40,27 @@ EDGE_ATTR_DIM = 5
 TASK_TYPES = ["计算密集型", "数据密集型", "通信密集型", "混合型"]
 TASK_INPUT_DIM = 14
 DEFAULT_EDGE_ATTR = torch.tensor([0.5, 0.5, 0.5, 0.8, 0.5], dtype=torch.float32)
+
+# 将报告中的理论边语义分组与当前后端实际使用的关系标签做一个轻量对齐。
+RELATION_SEMANTIC_GROUPS: Dict[str, str] = {
+    "CONNECTED_TO": "physical_link",
+    "LOW_LATENCY_LINK": "physical_link",
+    "SAME_HOST": "topology_adjacent",
+    "SAME_RACK": "topology_adjacent",
+    "SHARES_MEMORY": "shared_contention",
+    "COMPETES_BANDWIDTH": "shared_contention",
+    "SCHEDULING_DEPENDENCY": "dependency",
+}
+
+RESOURCE_SEMANTIC_GROUPS: Dict[str, str] = {
+    "CPU": "compute",
+    "GPU": "ai_accelerator",
+    "FPGA": "programmable_accelerator",
+    "MEMORY": "memory",
+    "STORAGE": "storage",
+    "NIC": "network",
+    "SWITCH": "network_topology",
+}
 
 
 class SimpleHeteroData:
@@ -70,6 +103,10 @@ def _extract_numeric_suffix(value: object, default: float = 0.0) -> float:
     return float(digits)
 
 
+def _resource_type(resource: ResourceNodeRead) -> str:
+    return str(resource.type).upper()
+
+
 class ResourceFeatureBuilder:
     """将不同资源类型的原始属性构造成归一化特征向量。"""
 
@@ -83,7 +120,17 @@ class ResourceFeatureBuilder:
             "NIC": self._build_nic_features,
             "SWITCH": self._build_switch_features,
         }
-        features = builders[resource.type](resource)
+        resource_type = _resource_type(resource)
+        if resource_type not in builders:
+            raise ValueError(f"不支持的资源类型：{resource.type}")
+
+        features = builders[resource_type](resource)
+        expected_dim = RESOURCE_INPUT_DIMS[resource_type]
+        if len(features) != expected_dim:
+            raise ValueError(
+                f"资源类型 {resource_type} 的特征维度不匹配："
+                f"期望 {expected_dim}，实际 {len(features)}"
+            )
         return [float(clamp(value, 0.0, 1.0)) for value in features]
 
     def _build_cpu_features(self, resource: ResourceNodeRead) -> List[float]:
@@ -139,7 +186,7 @@ class ResourceFeatureBuilder:
         static = resource.static_attrs
         dynamic = resource.dynamic_state
         capacity = static.get("capacity_gb", 0)
-        free_capacity = dynamic.get("memory_free", capacity)
+        free_capacity = dynamic.get("memory_free", dynamic.get("available_capacity_gb", capacity))
         return [
             _normalize(capacity, 2048.0),
             _normalize(free_capacity, 2048.0),
@@ -153,7 +200,7 @@ class ResourceFeatureBuilder:
         static = resource.static_attrs
         dynamic = resource.dynamic_state
         capacity = static.get("capacity_tb", 0)
-        free_capacity = dynamic.get("memory_free", capacity)
+        free_capacity = dynamic.get("storage_free", dynamic.get("free_capacity_tb", capacity))
         return [
             _normalize(capacity, 64.0),
             _normalize(free_capacity, 64.0),
@@ -202,17 +249,22 @@ class ResourceFeatureBuilder:
 
     def build_edge_attr(self, edge: ResourceEdgeRead) -> List[float]:
         payload = edge.model_dump() if hasattr(edge, "model_dump") else edge.dict()
-        bandwidth_norm = _normalize(payload.get("bandwidth_gbps"), 400.0, default=200.0)
-        latency_norm = _score_from_latency(payload.get("latency_ms"))
-        congestion_norm = _score_from_congestion(payload.get("congestion"))
-        reliability_norm = _normalize(payload.get("reliability"), 1.0, default=0.8)
+        bandwidth_raw = payload.get("bandwidth_gbps")
+        latency_raw = payload.get("latency_ms")
+        congestion_raw = payload.get("congestion")
+        reliability_raw = payload.get("reliability")
+
+        bandwidth_norm = _normalize(bandwidth_raw, 400.0, default=200.0)
+        latency_norm = _score_from_latency(latency_raw)
+        congestion_norm = _score_from_congestion(congestion_raw)
+        reliability_norm = _normalize(reliability_raw, 1.0, default=0.8)
         weight = clamp(float(payload.get("weight", 0.5)), 0.0, 1.0)
         return [
-            float(bandwidth_norm or DEFAULT_EDGE_ATTR[0]),
-            float(latency_norm if payload.get("latency_ms") is not None else DEFAULT_EDGE_ATTR[1]),
-            float(congestion_norm if payload.get("congestion") is not None else DEFAULT_EDGE_ATTR[2]),
-            float(reliability_norm or DEFAULT_EDGE_ATTR[3]),
-            weight,
+            float(bandwidth_norm if bandwidth_raw is not None else DEFAULT_EDGE_ATTR[0]),
+            float(latency_norm if latency_raw is not None else DEFAULT_EDGE_ATTR[1]),
+            float(congestion_norm if congestion_raw is not None else DEFAULT_EDGE_ATTR[2]),
+            float(reliability_norm if reliability_raw is not None else DEFAULT_EDGE_ATTR[3]),
+            float(weight),
         ]
 
 
@@ -220,7 +272,10 @@ def build_raw_feature_tensors(resources: Sequence[ResourceNodeRead]) -> Dict[str
     builder = ResourceFeatureBuilder()
     grouped: Dict[str, List[List[float]]] = {resource_type: [] for resource_type in RESOURCE_TYPES}
     for resource in resources:
-        grouped[resource.type].append(builder.build_feature_vector(resource))
+        resource_type = _resource_type(resource)
+        if resource_type not in grouped:
+            raise ValueError(f"不支持的资源类型：{resource.type}")
+        grouped[resource_type].append(builder.build_feature_vector(resource))
 
     x_dict: Dict[str, torch.Tensor] = {}
     for resource_type in RESOURCE_TYPES:
@@ -256,7 +311,7 @@ def build_edge_index_and_attr_dict(
     builder = ResourceFeatureBuilder()
     node_index_by_type: Dict[str, Dict[str, int]] = {resource_type: {} for resource_type in RESOURCE_TYPES}
     for resource_type in RESOURCE_TYPES:
-        type_nodes = [resource for resource in resources if resource.type == resource_type]
+        type_nodes = [resource for resource in resources if _resource_type(resource) == resource_type]
         node_index_by_type[resource_type] = {node.id: index for index, node in enumerate(type_nodes)}
 
     resource_by_id = {resource.id: resource for resource in resources}
@@ -269,8 +324,8 @@ def build_edge_index_and_attr_dict(
         if source_resource is None or target_resource is None:
             continue
         relation = edge.relation_type.upper()
-        source_type = source_resource.type
-        target_type = target_resource.type
+        source_type = _resource_type(source_resource)
+        target_type = _resource_type(target_resource)
         source_index = node_index_by_type[source_type].get(edge.source)
         target_index = node_index_by_type[target_type].get(edge.target)
         if source_index is None or target_index is None:

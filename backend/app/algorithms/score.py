@@ -1,5 +1,5 @@
 from collections import Counter
-from typing import Dict, Sequence
+from typing import Dict, Optional, Sequence
 
 import networkx as nx
 
@@ -19,11 +19,13 @@ class ScoreCalculator:
         beta: float = 0.35,
         gamma: float = 0.20,
         lambda_: float = 0.10,
+        qos_weight: float = 0.15,
     ) -> None:
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.lambda_ = lambda_
+        self.qos_weight = qos_weight
 
     def score_candidate(
         self,
@@ -33,7 +35,7 @@ class ScoreCalculator:
         node_ids: Sequence[str],
         rank: int,
     ) -> CandidateSubgraphSchema:
-        resource_nodes = [resources_by_id[node_id] for node_id in node_ids]
+        resource_nodes = [resources_by_id[node_id] for node_id in node_ids if node_id in resources_by_id]
         subgraph = graph.subgraph(node_ids)
 
         capacity_score = self.compute_capacity_score(task, resource_nodes)
@@ -41,11 +43,17 @@ class ScoreCalculator:
         topology_score = self.compute_topology_score(task, subgraph)
         qos_score = self.compute_qos_score(task, resource_nodes, subgraph)
         communication_cost, energy_cost, load_cost, cost = self.compute_cost(task, resource_nodes, subgraph)
-        final_score = self.compute_final_score(capacity_score, performance_score, topology_score, cost)
+        final_score = self.compute_final_score(
+            capacity_score,
+            performance_score,
+            topology_score,
+            cost,
+            qos_score=qos_score,
+        )
 
         edge_ids = []
         for source, target in subgraph.edges():
-            edge_ids.append(graph.edges[source, target]["id"])
+            edge_ids.append(graph.edges[source, target].get("id", f"{source}->{target}"))
 
         return CandidateSubgraphSchema(
             subgraph_id=generate_id("subgraph"),
@@ -150,13 +158,16 @@ class ScoreCalculator:
         performance_score: float,
         topology_score: float,
         cost: float,
+        qos_score: Optional[float] = None,
     ) -> float:
-        return clamp(
+        rule_score = (
             self.alpha * capacity_score
             + self.beta * performance_score
             + self.gamma * topology_score
-            - self.lambda_ * cost
         )
+        if qos_score is not None:
+            rule_score = (1.0 - self.qos_weight) * rule_score + self.qos_weight * qos_score
+        return clamp(rule_score - self.lambda_ * cost)
 
     def validate_top1(
         self,
