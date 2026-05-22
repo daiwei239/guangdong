@@ -10,6 +10,7 @@ from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 from app.algorithms.beam_search import BeamSearchSubgraphFinder
 from app.algorithms.feature_builder import RESOURCE_INPUT_DIMS, build_mock_heterodata_from_resources
 from app.algorithms.gnn_encoder import ResourceGraphEncoder
+from app.algorithms.rule_filter import RuleFilter
 from app.core.database import SessionLocal
 from app.models.match import CandidateSubgraphORM, MatchResultORM
 from app.schemas.match_schema import MatchResponseSchema
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 class MatchingService:
     def __init__(self) -> None:
         self.finder = BeamSearchSubgraphFinder()
+        self.rule_filter = RuleFilter()
         self._results = {}
         self._encoding_artifacts = {}
         self.checkpoint_path = Path(__file__).resolve().parents[2] / "models" / "matcher_checkpoint.pt"
@@ -67,6 +69,31 @@ class MatchingService:
             candidates.append(scoring_service.score_candidate(task, resource_lookup, graph, node_ids, index))
 
         candidates.sort(key=lambda candidate: candidate.final_score, reverse=True)
+
+        # 第五步：候选子图生成和打分完成后，先做硬规则验证。
+        # 如果最高分候选不满足规则，就自动回退重试下一个候选。
+        selected_candidate, rule_fallback_logs = self.rule_filter.select_with_rule_fallback(
+            task=task,
+            candidates=candidates,
+            resources_by_id=resource_lookup,
+            graph=graph,
+        )
+
+        if selected_candidate is None:
+            # 所有候选都没有通过规则验证时，保留原来的最高分候选作为兜底结果。
+            # 这样可以避免接口直接失败，同时在 artifacts 里保留失败原因供调试。
+            selected_candidate = candidates[0]
+            pipeline_steps.append("step_5_rule_validation_failed_use_score_top1")
+        else:
+            pipeline_steps.append("step_5_rule_validation_passed_with_fallback")
+
+        # 把通过规则验证的候选移动到第一位，让它成为新的 Top1。
+        candidates = [selected_candidate] + [
+            candidate
+            for candidate in candidates
+            if candidate.subgraph_id != selected_candidate.subgraph_id
+        ]
+
         for index, candidate in enumerate(candidates, start=1):
             candidate.rank = index
             candidate.is_top1 = index == 1
@@ -96,6 +123,7 @@ class MatchingService:
             "full_graph_embedding": full_graph_embedding.squeeze(0).detach().cpu().tolist(),
             "candidate_embeddings": candidate_embeddings,
             "top1_embedding": candidate_embeddings.get(self._candidate_signature(top1.nodes), []),
+            "rule_fallback_logs": rule_fallback_logs,
         }
         self._persist_result(result)
         return result
