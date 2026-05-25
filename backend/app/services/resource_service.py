@@ -11,6 +11,7 @@ from app.models.resource import ResourceEdgeORM, ResourceNodeORM
 from app.schemas.resource_schema import ResourceEdgeRead, ResourceNodeRead
 from app.utils.pydantic_compat import model_dump_compat
 
+from app.utils import resource_file_loader
 
 logger = logging.getLogger(__name__)
 
@@ -22,12 +23,39 @@ class ResourceService:
         self._resources = []
         self._edges = []
 
-    def generate_snapshot(self) -> Dict[str, List]:
+    def generate_snapshot(self) -> Dict[str, list]:
+        '''
+        如果文件中有数据，优先使用文件数据
+        如果文件没有数据，使用mock数据
+        无论使用文件还是mock，都会写入SQLite数据库作为持久化
+        '''
+        try:
+            file_resources, file_edges = resource_file_loader.load_resources_and_edges_from_files()
+        except Exception as exc:
+            print(f"[WARN] 读取 resources.jsonl / edges.jsonl 失败，回退到 mock 数据: {exc}")
+            file_resources, file_edges = [], []
+
+        if file_resources:
+            self._resources = file_resources
+            self._edges = file_edges
+
+            self._persist_snapshot()
+
+            return {
+                "resources": self._resources,
+                "edges": self._edges,
+            }
+
         self._resources = self.generator.generate_resources()
         self._edges = self.topology_generator.generate_edges(self._resources)
-        self._persist_snapshot()
-        return {"resources": self._resources, "edges": self._edges}
 
+        #self._persist_snapshot()
+
+        return {
+            "resources": self._resources,
+            "edges": self._edges,
+        }
+    
     def set_snapshot(self, resources: List[ResourceNodeRead], edges: List[ResourceEdgeRead]) -> None:
         self._resources = list(resources)
         self._edges = list(edges)

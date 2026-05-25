@@ -524,6 +524,143 @@ function generateData(seed: number): SimData {
   };
 }
 
+const API_BASE = "http://localhost:8000";
+
+function normalizeNodeType(type: string): NodeType {
+  const upper = String(type || "").toUpperCase();
+
+  if (
+    upper === "CPU" ||
+    upper === "GPU" ||
+    upper === "FPGA" ||
+    upper === "MEMORY" ||
+    upper === "STORAGE" ||
+    upper === "NIC" ||
+    upper === "SWITCH"
+  ) {
+    return upper as NodeType;
+  }
+
+  return "CPU";
+}
+
+function scaleToPercent(
+  value: number,
+  min: number,
+  max: number,
+  low = 6,
+  high = 94,
+) {
+  if (!Number.isFinite(value)) return 50;
+  if (max <= min) return 50;
+
+  return low + ((value - min) / (max - min)) * (high - low);
+}
+
+function mapBackendGraphToSimData(graph: any, seed: number): SimData {
+  const rng = mulberry32(seed);
+
+  const rawNodes = graph.nodes ?? [];
+  const rawEdges = graph.edges ?? graph.links ?? [];
+
+  const rawXs = rawNodes
+    .map((node: any) => Number(node.x))
+    .filter((value: number) => Number.isFinite(value));
+
+  const rawYs = rawNodes
+    .map((node: any) => Number(node.y))
+    .filter((value: number) => Number.isFinite(value));
+
+  const minX = rawXs.length ? Math.min(...rawXs) : 0;
+  const maxX = rawXs.length ? Math.max(...rawXs) : 100;
+  const minY = rawYs.length ? Math.min(...rawYs) : 0;
+  const maxY = rawYs.length ? Math.max(...rawYs) : 100;
+
+  const nodes: GraphNode[] = rawNodes.map((node: any, index: number) => {
+    const type = normalizeNodeType(node.type);
+
+    const cluster: "A" | "B" | "C" | "G" =
+      type === "SWITCH"
+        ? "G"
+        : index % 3 === 0
+          ? "A"
+          : index % 3 === 1
+            ? "B"
+            : "C";
+
+    const rawX = Number(node.x);
+    const rawY = Number(node.y);
+
+    const utilization = Number.isFinite(Number(node.utilization))
+      ? Number(node.utilization)
+      : Number(node.dynamic_state?.utilization ?? 0);
+
+    return {
+      id: String(node.id),
+      type,
+      cluster,
+      label: String(node.label ?? node.name ?? node.id),
+
+      // 关键：把后端坐标缩放到百分比
+      x: Number.isFinite(rawX)
+        ? scaleToPercent(rawX, minX, maxX, 6, 94)
+        : 10 + (index % 10) * 8,
+
+      y: Number.isFinite(rawY)
+        ? scaleToPercent(rawY, minY, maxY, 8, 88)
+        : 15 + Math.floor(index / 10) * 8,
+
+      utilization,
+      capacity:
+        type === "GPU"
+          ? `${node.static_attrs?.memory_total ?? 0}GB`
+          : type === "MEMORY"
+            ? `${node.static_attrs?.capacity_gb ?? 0}GB`
+            : type === "NIC" || type === "SWITCH"
+              ? `${node.static_attrs?.bandwidth_gbps ?? 0}Gbps`
+              : `${node.static_attrs?.cores ?? node.static_attrs?.logic_units ?? "-"}`,
+      bandwidth: `${node.static_attrs?.bandwidth_gbps ?? node.bandwidth_gbps ?? "-"}Gbps`,
+      latency: `${node.static_attrs?.latency_ms ?? node.latency_ms ?? "-"}ms`,
+    };
+  });
+
+  const nodeIds = new Set(nodes.map((node) => node.id));
+
+  const edges: GraphEdge[] = rawEdges
+    .map((edge: any, index: number) => ({
+      id: String(edge.id ?? `edge-${index + 1}`),
+      source: String(edge.source ?? edge.source_id ?? edge.from ?? ""),
+      target: String(edge.target ?? edge.target_id ?? edge.to ?? ""),
+    }))
+    .filter((edge: GraphEdge) => nodeIds.has(edge.source) && nodeIds.has(edge.target));
+
+  const task = createTask(rng);
+  const candidates = createCandidates(rng, task.taskType, nodes);
+
+  return {
+    seed,
+    snapshot: {
+      avgUtilization: nodes.length
+        ? Math.round(nodes.reduce((sum, node) => sum + node.utilization, 0) / nodes.length)
+        : 0,
+      networkBandwidth: 400,
+      gpuNodes: nodes.filter((node) => node.type === "GPU").length,
+      cpuNodes: nodes.filter((node) => node.type === "CPU").length,
+      fpgaNodes: nodes.filter((node) => node.type === "FPGA").length,
+      memoryNodes: nodes.filter((node) => node.type === "MEMORY").length,
+      storageNodes: nodes.filter((node) => node.type === "STORAGE").length,
+    },
+    task,
+    graph: {
+      nodes,
+      edges,
+    },
+    embeddingBars: Array.from({ length: 3 }, () => randomInt(rng, 60, 96)),
+    candidates,
+    bestCandidateId: candidates[0]?.id ?? "",
+  };
+}
+
 function renderStepTabContent(
   meta: StepMeta,
   tab: DetailTab,
@@ -665,9 +802,11 @@ export default function HeterogeneousResourceMappingPage() {
 
   const displayedCandidate = selectedCandidate ?? bestCandidate;
 
-  function handleGenerate() {
+  async function handleGenerate() {
     if (timerRef.current) window.clearTimeout(timerRef.current);
+
     const seed = Date.now();
+
     setLoading(true);
     setData(null);
     setActiveStep(1);
@@ -675,15 +814,36 @@ export default function HeterogeneousResourceMappingPage() {
     setGraphScale(1);
     setExpandedStepId(1);
     setDetailTabs(initialTabs);
-    timerRef.current = window.setTimeout(() => {
-      const next = generateData(seed);
+
+    try {
+      const response = await fetch(`${API_BASE}/api/resource-graph?limit=250`);
+
+      if (!response.ok) {
+        throw new Error(`加载资源图失败：HTTP ${response.status}`);
+      }
+
+      const graph = await response.json();
+      const next = mapBackendGraphToSimData(graph, seed);
+
       setData(next);
       setSelectedCandidateId(next.bestCandidateId);
       setActiveStep(1);
-      setLoading(false);
-    }, 600);
-  }
 
+      console.log("Loaded backend resource graph:", {
+        nodes: next.graph.nodes.length,
+        edges: next.graph.edges.length,
+      });
+    } catch (error) {
+      console.error("加载后端资源图失败，回退到本地模拟数据：", error);
+
+      const fallback = generateData(seed);
+      setData(fallback);
+      setSelectedCandidateId(fallback.bestCandidateId);
+      setActiveStep(1);
+    } finally {
+      setLoading(false);
+    }
+  }
   function clampScale(next: number) {
     return Math.max(0.8, Math.min(1.28, Number(next.toFixed(2))));
   }
@@ -900,8 +1060,8 @@ export default function HeterogeneousResourceMappingPage() {
                             x2={`${target.x}%`}
                             y2={`${target.y}%`}
                             stroke={highlighted ? "url(#edgeHotLight)" : "url(#edgeBaseLight)"}
-                            strokeWidth={highlighted ? 1.9 : 0.95}
-                            opacity={activeStep === 5 ? (highlighted ? 1 : 0.12) : activeStep === 2 || activeStep === 4 ? 0.72 : 0.38}
+                            strokeWidth={highlighted ? 2.2 : 1.4}
+                            opacity={activeStep === 5 ? (highlighted ? 1 : 0.28) : activeStep === 2 || activeStep === 4 ? 0.72 : 0.38}
                           />
                           {(activeStep === 2 || activeStep === 4) && (
                             <motion.circle
