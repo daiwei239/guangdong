@@ -64,20 +64,43 @@ class BeamSearchSubgraphFinder:
 
     def _expand_neighbors(self, graph: nx.Graph, node_ids: List[str]) -> List[str]:
         neighbors = set()
+        #定义需要屏蔽的负面关系类型
+        BLOCKED_RELATIONS={"COMPETES_BANDWIDTH","SCHEDULING_DEPENDENCY"}
         for node_id in node_ids:
-            neighbors.update(graph.successors(node_id))
-            neighbors.update(graph.presuccessors(node_id))
+            for u, v, data in graph.out_edges(node_id,data=True):
+                if data.get("relation_type") not in BLOCKED_RELATIONS:
+                    neighbors.add(v)
+
+            for u, v, data in graph.in_edges(node_id,data=True):
+                if data.get("relation_type") not in BLOCKED_RELATIONS:
+                    neighbors.add(u)
+            
         return list(neighbors)
 
     def _node_expansion_score(self, graph: nx.Graph, neighbor: str, node_ids: List[str]) -> float:
         edge_bonus = 0.0
         for node_id in node_ids:
-            if graph.has_edge(node_id, neighbor):
-                attrs = graph.edges[node_id, neighbor]
-                edge_bonus += float(attrs.get("weight", 1.0)) * 8.0
-                edge_bonus += float(attrs.get("bandwidth_gbps", 0.0)) * 0.03
-                edge_bonus -= float(attrs.get("latency_ms", 0.0)) * 0.4
-                edge_bonus += self._topology_affinity(graph, node_id, neighbor)
+            if graph.has_edge(node_id, neighbor) or graph.has_edge(neighbor,node_id):
+                all_edges_data=[]
+                if graph.has_edge(node_id, neighbor):
+                    all_edges_data.extend(graph.get_edge_data(node_id, neighbor).values())
+                if graph.has_edge(neighbor, node_id):
+                    all_edges_data.extend(graph.get_edge_data(neighbor, node_id).values())
+                    
+                for attrs in all_edges_data:
+                    relation_type = attrs.get("relation_type")
+                        
+                        # 如果发现竞争关系，进行严重扣分！
+                    if relation_type == "COMPETES_BANDWIDTH":
+                        edge_bonus -= 15.0  # 给予强力惩罚
+                        continue
+
+                        # 正常的边加分逻辑
+                    edge_bonus += float(attrs.get("weight", 1.0)) * 8.0
+                    edge_bonus += float(attrs.get("bandwidth_gbps", 0.0)) * 0.03
+                    edge_bonus -= float(attrs.get("latency_ms", 0.0)) * 0.4
+
+                edge_bonus += self._topology_affinity(graph, node_id, neighbor)    
         return edge_bonus
 
     def _topology_affinity(self, graph: nx.Graph, source: str, target: str) -> float:
