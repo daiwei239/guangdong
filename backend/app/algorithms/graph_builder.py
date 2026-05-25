@@ -6,6 +6,7 @@ import torch
 from app.schemas.resource_schema import FrontendResourceEdge, FrontendResourceNode, ResourceEdgeRead, ResourceNodeRead
 from app.utils.pydantic_compat import model_dump_compat
 
+from app.schemas.topology_schema import VALID_EDGE_RELATIONS
 
 def add_reverse_edges(
     edge_index_dict: Dict[Tuple[str, str, str], torch.Tensor],
@@ -32,10 +33,18 @@ class GraphBuilder:
     """负责 NetworkX 资源图构建与前端大屏结构转换。"""
 
     def build_graph(self, resources: Sequence[ResourceNodeRead], edges: Sequence[ResourceEdgeRead]) -> nx.Graph:
-        graph = nx.Graph()
+        """加入类型检验"""
+        resource_types={res.id:res.type for res in resources}
+        
+        graph = nx.MultiDiGraph()
         for resource in resources:
             graph.add_node(resource.id, **model_dump_compat(resource))
+        #添加有效的逻辑边
         for edge in edges:
+            src_type = resource_types.get(edge.source)
+            tgt_type = resource_types.get(edge.target)
+            if (src_type, edge.relation_type, tgt_type) not in VALID_EDGE_RELATIONS:
+                raise ValueError(f"非法边关系：{src_type} -[{edge.relation_type}]-> {tgt_type}")
             graph.add_edge(edge.source, edge.target, **model_dump_compat(edge))
         return graph
 

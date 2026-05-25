@@ -54,7 +54,8 @@ class BeamSearchSubgraphFinder:
                 if signature in visited_signatures:
                     continue
                 visited_signatures.add(signature)
-                if nx.is_connected(graph.subgraph(enriched)):
+                '''使其支持有向图'''
+                if nx.is_weakly_connected(graph.subgraph(enriched)):
                     candidates.append(enriched)
                 if len(candidates) >= self.target_candidates:
                     return candidates
@@ -64,7 +65,8 @@ class BeamSearchSubgraphFinder:
     def _expand_neighbors(self, graph: nx.Graph, node_ids: List[str]) -> List[str]:
         neighbors = set()
         for node_id in node_ids:
-            neighbors.update(graph.neighbors(node_id))
+            neighbors.update(graph.successors(node_id))
+            neighbors.update(graph.presuccessors(node_id))
         return list(neighbors)
 
     def _node_expansion_score(self, graph: nx.Graph, neighbor: str, node_ids: List[str]) -> float:

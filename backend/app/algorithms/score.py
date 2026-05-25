@@ -44,8 +44,8 @@ class ScoreCalculator:
         final_score = self.compute_final_score(capacity_score, performance_score, topology_score, cost)
 
         edge_ids = []
-        for source, target in subgraph.edges():
-            edge_ids.append(graph.edges[source, target]["id"])
+        for source, target, key in subgraph.edges():
+            edge_ids.append(graph.edges[source, target][key]["id"])
 
         return CandidateSubgraphSchema(
             subgraph_id=generate_id("subgraph"),
