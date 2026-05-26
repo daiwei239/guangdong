@@ -44,8 +44,8 @@ class ScoreCalculator:
         final_score = self.compute_final_score(capacity_score, performance_score, topology_score, cost)
 
         edge_ids = []
-        for source, target, key in subgraph.edges():
-            edge_ids.append(graph.edges[source, target][key]["id"])
+        for source, target, key, data in subgraph.edges(keys=True,data=True):
+            edge_ids.append(data["id"])
 
         return CandidateSubgraphSchema(
             subgraph_id=generate_id("subgraph"),
@@ -99,7 +99,7 @@ class ScoreCalculator:
             avg_bandwidth = 0.0
         topo_context_bonus = self._compute_topology_context_bonus(subgraph)
         return clamp(
-            (65.0 if nx.is_connected(subgraph) else 30.0)
+            (65.0 if nx.is_weakly_connected(subgraph) else 30.0)
             + min(avg_bandwidth / 4.0, 25.0)
             - min(avg_latency * 4.0, 25.0)
             + topo_context_bonus
