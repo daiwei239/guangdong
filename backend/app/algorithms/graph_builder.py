@@ -36,14 +36,14 @@ class GraphBuilder:
         """加入类型检验"""
         resource_types={res.id:res.type for res in resources}
         
-        graph = nx.MultiDiGraph()
+        graph = nx.MultiDiGraph()#创建带权有向图
         for resource in resources:
             graph.add_node(resource.id, **model_dump_compat(resource))
         #添加有效的逻辑边
         for edge in edges:
             src_type = resource_types.get(edge.source)
             tgt_type = resource_types.get(edge.target)
-            if (src_type, edge.relation_type, tgt_type) not in VALID_EDGE_RELATIONS:
+            if (src_type, edge.relation_type, tgt_type) not in VALID_EDGE_RELATIONS:#判断连接关系是否有效
                 raise ValueError(f"非法边关系：{src_type} -[{edge.relation_type}]-> {tgt_type}")
             graph.add_edge(edge.source, edge.target, **model_dump_compat(edge))
         return graph
