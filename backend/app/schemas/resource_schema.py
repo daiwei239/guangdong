@@ -47,33 +47,13 @@ class ResourceEdgeRead(BaseModel):
             orm_mode = True
 
 
-class FrontendResourceNode(BaseModel):
-    id: str
-    label: str
-    type: str
-    cluster_id: str
-    x: float
-    y: float
-    status: str
-    utilization: float
-    available: bool
-    is_candidate: bool = False
-    is_top1: bool = False
-
-
-class FrontendResourceEdge(BaseModel):
-    id: str
-    source: str
-    target: str
-    relation_type: str
-    bandwidth_gbps: float
-    latency_ms: float
-    is_candidate_edge: bool = False
-    is_top1_edge: bool = False
-
-
 class ResourceSnapshot(BaseModel):
     total_nodes: int
     total_edges: int
     by_type: Dict[str, int]
     resources: List[ResourceNodeRead]
+
+
+class ResourceSnapshotWrite(BaseModel):
+    resources: List[ResourceNodeRead]
+    edges: List[ResourceEdgeRead]

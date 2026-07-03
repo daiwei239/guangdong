@@ -288,7 +288,7 @@ def build_edge_index_and_attr_dict(
     return add_reverse_edges(edge_index_dict, edge_attr_dict)
 
 
-def build_mock_heterodata_from_resources(
+def build_heterodata_from_resources(
     resources: Sequence[ResourceNodeRead],
     edges: Sequence[ResourceEdgeRead],
 ):

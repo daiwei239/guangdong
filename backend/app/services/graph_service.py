@@ -1,4 +1,4 @@
-from typing import Dict, Optional, Sequence, Set
+from typing import Sequence
 
 import networkx as nx
 
@@ -17,24 +17,6 @@ class GraphService:
     def build_networkx_graph(self, resources: Sequence[ResourceNodeRead], edges: Sequence[ResourceEdgeRead]) -> nx.Graph:
         self._graph = self.builder.build_graph(resources, edges)
         return self._graph
-
-    def build_graph_snapshot(
-        self,
-        resources: Sequence[ResourceNodeRead],
-        edges: Sequence[ResourceEdgeRead],
-        candidate_node_ids: Optional[Set[str]] = None,
-        top1_node_ids: Optional[Set[str]] = None,
-        candidate_edge_ids: Optional[Set[str]] = None,
-        top1_edge_ids: Optional[Set[str]] = None,
-    ) -> Dict:
-        return self.builder.to_frontend_snapshot(
-            resources,
-            edges,
-            candidate_node_ids=candidate_node_ids,
-            top1_node_ids=top1_node_ids,
-            candidate_edge_ids=candidate_edge_ids,
-            top1_edge_ids=top1_edge_ids,
-        )
 
     def sync_to_neo4j(self, resources: Sequence[ResourceNodeRead], edges: Sequence[ResourceEdgeRead]) -> None:
         self.neo4j_client.load_graph_from_resources(

@@ -20,8 +20,6 @@ class Settings(BaseSettings):
     app_name: str = "semi-real-backend"
     app_version: str = "0.1.0"
     debug: bool = True
-    api_prefix: str = "/api"
-
     database_url: str = "sqlite:///./semi_real_backend.db"
     postgres_url: str = "postgresql+psycopg://guangdong_user:guangdong_pass@localhost:5432/guangdong_resource_mapping"
 
@@ -32,8 +30,6 @@ class Settings(BaseSettings):
 
     redis_enabled: bool = False
     redis_url: str = "redis://localhost:6379/0"
-
-    cors_origins: List[str] = ["*"]
 
     if field_validator is not None:
         @field_validator("debug", mode="before")

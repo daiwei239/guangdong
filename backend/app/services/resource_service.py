@@ -5,8 +5,6 @@ from typing import Dict, List
 from sqlalchemy import delete, select
 
 from app.core.database import SessionLocal
-from app.mock.mock_resource_generator import MockResourceGenerator
-from app.mock.mock_topology_generator import MockTopologyGenerator
 from app.models.resource import ResourceEdgeORM, ResourceNodeORM
 from app.schemas.resource_schema import ResourceEdgeRead, ResourceNodeRead
 from app.utils.pydantic_compat import model_dump_compat
@@ -17,16 +15,8 @@ logger = logging.getLogger(__name__)
 
 class ResourceService:
     def __init__(self) -> None:
-        self.generator = MockResourceGenerator()
-        self.topology_generator = MockTopologyGenerator()
         self._resources = []
         self._edges = []
-
-    def generate_snapshot(self) -> Dict[str, List]:
-        self._resources = self.generator.generate_resources()
-        self._edges = self.topology_generator.generate_edges(self._resources)
-        self._persist_snapshot()
-        return {"resources": self._resources, "edges": self._edges}
 
     def set_snapshot(self, resources: List[ResourceNodeRead], edges: List[ResourceEdgeRead]) -> None:
         self._resources = list(resources)

@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import List
 
 from pydantic import BaseModel
 
@@ -33,14 +33,4 @@ class MatchResponseSchema(BaseModel):
     candidates: List[CandidateSubgraphSchema]
     top1: CandidateSubgraphSchema
     verification: VerificationResultSchema
-    pipeline_steps: List[str]
-
-
-class SimulationResponseSchema(BaseModel):
-    resource_snapshot: Dict
-    task_profile: Dict
-    resource_graph: Dict
-    candidates: List[Dict]
-    top1: Dict
-    verification: Dict
     pipeline_steps: List[str]

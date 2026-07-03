@@ -143,6 +143,10 @@ class ResourceGraphEncoder(nn.Module):
         return dict(raw)
 
     def _ensure_hetero_layers(self, edge_types: Sequence[Tuple[str, str, str]]) -> None:
+        if HeteroConv is None or GATConv is None:
+            self.configured_edge_types = []
+            self.hetero_layers = None
+            return
         normalized = sorted(set(edge_types))
         if self.hetero_layers is not None and normalized == sorted(self.configured_edge_types):
             return

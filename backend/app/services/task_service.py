@@ -4,7 +4,6 @@ from typing import Optional
 from sqlalchemy import desc, select
 
 from app.core.database import SessionLocal
-from app.mock.mock_task_generator import MockTaskGenerator
 from app.models.task import TaskProfileORM
 from app.schemas.task_schema import TaskProfileCreate, TaskProfileRead
 
@@ -14,16 +13,8 @@ logger = logging.getLogger(__name__)
 
 class TaskService:
     def __init__(self) -> None:
-        self.generator = MockTaskGenerator()
         self._tasks = {}
         self._current_task_id = None
-
-    def generate_task(self) -> TaskProfileRead:
-        task = self.generator.generate_task_profile()
-        self._tasks[task.task_id] = task
-        self._current_task_id = task.task_id
-        self._persist_task(task)
-        return task
 
     def create_task(self, task: TaskProfileCreate) -> TaskProfileRead:
         task_read = TaskProfileRead(**task.dict())

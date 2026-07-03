@@ -8,7 +8,7 @@ from sqlalchemy import delete, desc, select
 from torch.nn.parameter import UninitializedBuffer, UninitializedParameter
 
 from app.algorithms.beam_search import BeamSearchSubgraphFinder
-from app.algorithms.feature_builder import RESOURCE_INPUT_DIMS, build_mock_heterodata_from_resources
+from app.algorithms.feature_builder import RESOURCE_INPUT_DIMS, build_heterodata_from_resources
 from app.algorithms.gnn_encoder import ResourceGraphEncoder
 from app.core.database import SessionLocal
 from app.models.match import CandidateSubgraphORM, MatchResultORM
@@ -152,7 +152,7 @@ class MatchingService:
         edges: Sequence[ResourceEdgeRead],
         task_type: Optional[str] = None,
     ) -> torch.Tensor:
-        data = build_mock_heterodata_from_resources(resources, edges)
+        data = build_heterodata_from_resources(resources, edges)
         with torch.no_grad():
             z_subgraph, _ = self.resource_encoder(data, task_type=task_type)
         return z_subgraph
@@ -167,7 +167,7 @@ class MatchingService:
         selected_nodes = [resource for resource in resources if resource.id in node_ids]
         selected_node_ids = {resource.id for resource in selected_nodes}
         selected_edges = [edge for edge in edges if edge.source in selected_node_ids and edge.target in selected_node_ids]
-        data = build_mock_heterodata_from_resources(selected_nodes, selected_edges)
+        data = build_heterodata_from_resources(selected_nodes, selected_edges)
         with torch.no_grad():
             z_subgraph, _ = self.resource_encoder(data, task_type=task.task_type)
         return z_subgraph.squeeze(0).detach().cpu().tolist()
