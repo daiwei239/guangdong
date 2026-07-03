@@ -4,7 +4,7 @@ import argparse
 import math
 import random
 import sys
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
@@ -256,13 +256,13 @@ def dynamic_state_from_row(row: pd.Series | None, positive: bool) -> Dict:
 
 
 def build_server_subgraph(
-    server_id: str,
-    gpu_spec: str | None,
-    row: pd.Series | None,
-    positive: bool,
+        server_id: str,
+        gpu_spec: str | None,
+        row: pd.Series | None,
+        positive: bool,
 ) -> Tuple[List[ResourceNodeRead], List[ResourceEdgeRead]]:
     """为一个 server 构造 CPU/GPU/MEMORY/NIC 候选子图。"""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     topo = topo_context_from_server(server_id)
     dyn = dynamic_state_from_row(row, positive=positive)
 
@@ -387,9 +387,9 @@ def load_merged_data(data_dir: Path, max_tasks: int | None = None) -> pd.DataFra
 
 
 def make_training_samples(
-    merged: pd.DataFrame,
-    negative_per_task: int,
-    seed: int,
+        merged: pd.DataFrame,
+        negative_per_task: int,
+        seed: int,
 ) -> List[Tuple[object, torch.Tensor, torch.Tensor]]:
     """构造二分类训练样本：(候选子图, 任务向量, 标签)。"""
     rng = random.Random(seed)
@@ -458,6 +458,66 @@ def evaluate(model: TaskResourceMatcher, samples: List[Tuple[object, torch.Tenso
     }
 
 
+def resolve_project_path(path_value: str) -> Path:
+    """把相对路径统一解析到 backend 目录下，避免从不同目录运行时输出位置混乱。"""
+    path = Path(path_value)
+    if path.is_absolute():
+        return path
+    return PROJECT_ROOT / path
+
+
+def save_training_history(history: List[Dict[str, float]], args: argparse.Namespace) -> None:
+    """保存训练历史，并可选地直接生成 loss / accuracy 曲线图。"""
+    if not history:
+        return
+
+    history_path = resolve_project_path(args.history_output)
+    history_path.parent.mkdir(parents=True, exist_ok=True)
+
+    history_df = pd.DataFrame(history)
+    history_df.to_csv(history_path, index=False)
+    print({"saved_training_history": str(history_path)})
+
+    if args.no_plot:
+        return
+
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        raise RuntimeError("画曲线需要 matplotlib。请先执行：pip install matplotlib") from exc
+
+    curve_dir = resolve_project_path(args.curve_dir)
+    curve_dir.mkdir(parents=True, exist_ok=True)
+
+    loss_curve_path = curve_dir / "training_loss_curve.png"
+    plt.figure()
+    plt.plot(history_df["epoch"], history_df["train_loss"], marker="o", label="train_loss")
+    plt.plot(history_df["epoch"], history_df["val_loss"], marker="o", label="val_loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training and Validation Loss")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(loss_curve_path, dpi=200)
+    plt.close()
+
+    accuracy_curve_path = curve_dir / "validation_accuracy_curve.png"
+    plt.figure()
+    plt.plot(history_df["epoch"], history_df["val_accuracy"], marker="o", label="val_accuracy")
+    plt.xlabel("Epoch")
+    plt.ylabel("Accuracy")
+    plt.title("Validation Accuracy")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(accuracy_curve_path, dpi=200)
+    plt.close()
+
+    print({"saved_loss_curve": str(loss_curve_path)})
+    print({"saved_accuracy_curve": str(accuracy_curve_path)})
+
+
 def train(args: argparse.Namespace) -> None:
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -496,6 +556,8 @@ def train(args: argparse.Namespace) -> None:
         }
     )
 
+    history: List[Dict[str, float]] = []
+
     model.train()
     for epoch in range(args.epochs):
         random.shuffle(train_samples)
@@ -511,14 +573,16 @@ def train(args: argparse.Namespace) -> None:
 
         train_loss = total_loss / max(len(train_samples), 1)
         val_metrics = evaluate(model, val_samples)
-        print(
-            {
-                "epoch": epoch + 1,
-                "train_loss": round(train_loss, 4),
-                "val_loss": round(val_metrics["loss"], 4),
-                "val_accuracy": round(val_metrics["accuracy"], 4),
-            }
-        )
+        epoch_record = {
+            "epoch": epoch + 1,
+            "train_loss": round(train_loss, 4),
+            "val_loss": round(val_metrics["loss"], 4),
+            "val_accuracy": round(val_metrics["accuracy"], 4),
+        }
+        history.append(epoch_record)
+        print(epoch_record)
+
+    save_training_history(history, args)
 
     models_dir = PROJECT_ROOT / "models"
     models_dir.mkdir(parents=True, exist_ok=True)
@@ -563,6 +627,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--out-dim", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--seed", type=int, default=42)
+    parser.add_argument("--history-output", default="outputs/training_history.csv", help="训练指标 CSV 输出位置")
+    parser.add_argument("--curve-dir", default="outputs", help="训练曲线图输出目录")
+    parser.add_argument("--no-plot", action="store_true", help="只保存 CSV，不生成曲线图")
     args = parser.parse_args()
 
     if args.max_tasks == 0:
