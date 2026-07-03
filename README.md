@@ -1,62 +1,22 @@
-# Heterogeneous Resource Mapping Backend
+# Resource State Data Pipeline
 
-本项目现在是一个脚本驱动的后端仓库，专注于异构资源匹配流程本身，不再提供 HTTP API。
+本仓库当前实现的是一个三层资源状态数据 pipeline：
 
-## Scope
+1. 输入层：读取实时资源状态数据。
+2. 处理层：清洗并归一化资源指标。
+3. 输出层：生成标准化 JSON 输出。
 
-- 资源快照建模与持久化
-- 任务建模与持久化
-- NetworkX 资源图构建
-- 特征构建与特征编码
-- 异构 GNN 资源图编码
-- 候选子图搜索与评分
-- 脚本方式执行完整匹配流程
+旧的任务匹配、GNN、资源图、Beam Search、评分、数据库持久化结构已经从当前 pipeline 中移除。
 
 ## Run
 
 ```bash
-pip install -r requirements.txt
 cd backend
-python scripts/run_pipeline.py --resources path/to/resources.json --task path/to/task.json
+python scripts/run_pipeline.py --input path/to/ResourceState.json
 ```
 
-可选输出文件：
+输出到文件：
 
 ```bash
-python scripts/run_pipeline.py --resources path/to/resources.json --task path/to/task.json --output outputs/result.json
+python scripts/run_pipeline.py --input path/to/ResourceState.json --output outputs/normalized.json
 ```
-
-## Input Format
-
-`resources.json`:
-
-```json
-{
-  "resources": [],
-  "edges": []
-}
-```
-
-`task.json`:
-
-```json
-{
-  "task_id": "task-001",
-  "task_type": "计算密集型",
-  "dag_nodes": [],
-  "compute_req": {},
-  "memory_req": {},
-  "storage_req": {},
-  "network_req": {},
-  "energy_limit": 1000,
-  "qos_deadline_sec": 60,
-  "priority": 1,
-  "constraints": {}
-}
-```
-
-## Notes
-
-- `backend/scripts/run_pipeline.py` 是当前主入口。
-- FastAPI、路由层、WebSocket、前端和 mock 演示链路都已经移除。
-- GNN 核心实现仍在 `backend/app/algorithms/gnn_encoder.py`。
