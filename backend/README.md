@@ -63,3 +63,42 @@ python scripts/run_pipeline.py --resources path/to/ResourceInput.json --output-d
 ```bash
 python scripts/run_pipeline.py --input path/to/ResourceInput.json --output combined.json
 ```
+
+## Kafka realtime input
+
+Kafka sits before the 2.1 input layer:
+
+```text
+resource data sources -> Kafka topics -> KafkaInputAdapter -> StateAggregator -> process -> output
+```
+
+Default topics:
+
+```text
+resource.management_config
+resource.agent_collect
+resource.realtime_monitor
+resource.device_plugin
+resource.topology_probe
+resource.scheduler_queue
+resource.asset_ops
+resource.analytics_history
+```
+
+Use `node_id` as the Kafka message key. Message values should use the `ResourceEvent` JSON shape:
+
+```json
+{
+  "timestamp": "2026-05-18T10:32:00+08:00",
+  "trace_id": "TRACE-R20260518-000001",
+  "node_id": "N-C01-0001",
+  "attributes": {},
+  "metrics": {}
+}
+```
+
+Run one Kafka-backed pipeline batch:
+
+```bash
+python scripts/run_pipeline.py --kafka --max-messages 100 --output-dir outputs/
+```

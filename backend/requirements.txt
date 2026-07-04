@@ -1,5 +1,8 @@
 # Data validation
 pydantic>=2.7.0,<3.0.0
 
+# Realtime input
+kafka-python>=2.0.2,<3.0.0
+
 # Local verification
 pytest>=8.2.0,<9.0.0
