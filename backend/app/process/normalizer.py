@@ -1,7 +1,9 @@
 from typing import Any, Dict
 from copy import deepcopy
 
+from app.process.field_standardizer import standardize_resource_fields
 from app.process.identifier import build_device_ids, normalize_cluster_id, normalize_node_id
+from app.process.quality_checker import sanitize_realtime_metrics
 from app.schemas.resource_schema import ProcessedResourceRecord, ProcessedResourceState, SensedResourceState, utc_now_iso
 
 
@@ -24,6 +26,8 @@ class ResourceProcessLayer:
         attributes = deepcopy(resource.attributes)
         metrics = deepcopy(resource.metrics)
 
+        standardize_resource_fields(attributes, metrics)
+
         cluster_id = normalize_cluster_id(attributes)
         node_id = normalize_node_id(attributes, cluster_id, sequence)
         attributes["cluster_id"] = cluster_id
@@ -32,6 +36,7 @@ class ResourceProcessLayer:
         self._move_numa_topology_to_cpu(attributes)
         self._normalize_accelerator_temperature(metrics)
         self._normalize_device_ids(attributes, node_id)
+        sanitize_realtime_metrics(metrics)
 
         return ProcessedResourceRecord(
             id=resource.id,

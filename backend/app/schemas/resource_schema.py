@@ -1,11 +1,125 @@
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 DEFAULT_SCHEMA_VERSION = "1.0"
 RESOURCE_DESCRIPTION_MODULE = "Module-2.1-ResourceDescription"
+
+
+class ClusterType(str, Enum):
+    HPC = "HPC"
+    AI = "AI"
+    HYBRID = "Hybrid"
+    EDGE = "Edge"
+
+
+class NodeRole(str, Enum):
+    CONTROL = "control"
+    COMPUTE = "compute"
+    STORAGE = "storage"
+    LOGIN = "login"
+    MIXED = "mixed"
+
+
+class NodeStatus(str, Enum):
+    READY = "Ready"
+    BUSY = "Busy"
+    DRAINING = "Draining"
+    OFFLINE = "Offline"
+    FAULT = "Fault"
+
+
+class AcceleratorType(str, Enum):
+    NPU = "NPU"
+    GPU = "GPU"
+    NONE = "None"
+
+
+class MaintenanceState(str, Enum):
+    NORMAL = "normal"
+    WARNING = "warning"
+    MAINTENANCE = "maintenance"
+
+
+def validate_cluster_type_attributes(attributes: Dict[str, Any]) -> Dict[str, Any]:
+    cluster_type = attributes.get("cluster_type")
+    if cluster_type is None:
+        return attributes
+
+    try:
+        ClusterType(cluster_type)
+    except ValueError as exc:
+        allowed = ", ".join(cluster.value for cluster in ClusterType)
+        raise ValueError(f"cluster_type must be one of: {allowed}") from exc
+
+    return attributes
+
+
+def validate_node_role_attributes(attributes: Dict[str, Any]) -> Dict[str, Any]:
+    node_role = attributes.get("node_role")
+    if node_role is None:
+        return attributes
+
+    try:
+        NodeRole(node_role)
+    except ValueError as exc:
+        allowed = ", ".join(role.value for role in NodeRole)
+        raise ValueError(f"node_role must be one of: {allowed}") from exc
+
+    return attributes
+
+
+def validate_node_status_metrics(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    node_status = metrics.get("node_status")
+    if node_status is None:
+        return metrics
+
+    try:
+        NodeStatus(node_status)
+    except ValueError as exc:
+        allowed = ", ".join(status.value for status in NodeStatus)
+        raise ValueError(f"node_status must be one of: {allowed}") from exc
+
+    return metrics
+
+
+def validate_maintenance_state_metrics(metrics: Dict[str, Any]) -> Dict[str, Any]:
+    reliability_state = metrics.get("reliability_state")
+    if not isinstance(reliability_state, dict):
+        return metrics
+
+    maintenance_state = reliability_state.get("maintenance_state")
+    if maintenance_state is None:
+        return metrics
+
+    try:
+        MaintenanceState(maintenance_state)
+    except ValueError as exc:
+        allowed = ", ".join(state.value for state in MaintenanceState)
+        raise ValueError(f"maintenance_state must be one of: {allowed}") from exc
+
+    return metrics
+
+
+def validate_accelerator_attributes(attributes: Dict[str, Any]) -> Dict[str, Any]:
+    accelerator = attributes.get("accelerator")
+    if not isinstance(accelerator, dict):
+        return attributes
+
+    accelerator_type = accelerator.get("accelerator_type")
+    if accelerator_type is None:
+        return attributes
+
+    try:
+        AcceleratorType(accelerator_type)
+    except ValueError as exc:
+        allowed = ", ".join(accelerator_type.value for accelerator_type in AcceleratorType)
+        raise ValueError(f"accelerator_type must be one of: {allowed}") from exc
+
+    return attributes
 
 
 class RawResourceRecord(BaseModel):
@@ -13,6 +127,19 @@ class RawResourceRecord(BaseModel):
     type: str
     metrics: Dict[str, Any] = Field(default_factory=dict)
     attributes: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("attributes")
+    @classmethod
+    def validate_cluster_type(cls, attributes: Dict[str, Any]) -> Dict[str, Any]:
+        attributes = validate_cluster_type_attributes(attributes)
+        attributes = validate_node_role_attributes(attributes)
+        return validate_accelerator_attributes(attributes)
+
+    @field_validator("metrics")
+    @classmethod
+    def validate_node_status(cls, metrics: Dict[str, Any]) -> Dict[str, Any]:
+        metrics = validate_node_status_metrics(metrics)
+        return validate_maintenance_state_metrics(metrics)
 
 
 class RawTopologyEdge(BaseModel):

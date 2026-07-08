@@ -64,41 +64,18 @@ python scripts/run_pipeline.py --resources path/to/ResourceInput.json --output-d
 python scripts/run_pipeline.py --input path/to/ResourceInput.json --output combined.json
 ```
 
-## Kafka realtime input
+## Huawei management platform input
 
-Kafka sits before the 2.1 input layer:
-
-```text
-resource data sources -> Kafka topics -> KafkaInputAdapter -> StateAggregator -> process -> output
-```
-
-Default topics:
-
-```text
-resource.management_config
-resource.agent_collect
-resource.realtime_monitor
-resource.device_plugin
-resource.topology_probe
-resource.scheduler_queue
-resource.asset_ops
-resource.analytics_history
-```
-
-Use `node_id` as the Kafka message key. Message values should use the `ResourceEvent` JSON shape:
-
-```json
-{
-  "timestamp": "2026-05-18T10:32:00+08:00",
-  "trace_id": "TRACE-R20260518-000001",
-  "node_id": "N-C01-0001",
-  "attributes": {},
-  "metrics": {}
-}
-```
-
-Run one Kafka-backed pipeline batch:
+Use `--huawei-management-config` when the input should combine FusionDirector, MindX, MindCluster, or a platform gateway that returns normalized resource events:
 
 ```bash
-python scripts/run_pipeline.py --kafka --max-messages 100 --output-dir outputs/
+python scripts/run_pipeline.py --huawei-management-config examples/huawei_management_config.example.json --output-dir outputs/
 ```
+
+The configured platform endpoints can return any of these normalized JSON shapes:
+
+- `events`: a list of `ResourceEvent` objects.
+- `sources`: grouped source batches keyed by source type.
+- `nodes`: a shorthand node patch list for one configured source.
+
+Use FusionDirector for fleet inventory, server O&M, energy, asset, and lifecycle information. Use MindX or MindCluster for Ascend accelerator resources, scheduling, queue, task, and availability signals.

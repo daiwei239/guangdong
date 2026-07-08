@@ -1,4 +1,4 @@
-# Python
+# Python caches / build artifacts
 __pycache__/
 *.py[cod]
 *.pyo
@@ -14,11 +14,14 @@ build/
 venv/
 env/
 conda/
+backend/.venv/
 
 # Pytest
 .pytest_cache/
+backend/.pytest_cache/
 .coverage
 htmlcov/
+.tmp/
 
 # IDE
 .vscode/
@@ -48,6 +51,9 @@ vite.err.log
 .env
 .env.*
 !.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
 
 # Database
 *.db
@@ -56,11 +62,35 @@ vite.err.log
 # Docker
 docker-compose.override.yml
 
-# Claude Code
+# Codex / Claude local state
 .claude/
-
-# Docs planning (optional)
 docs/superpowers/
+
+# Generated benchmark / runtime outputs
+outputs/
+benchmark_outputs/
+backend/outputs/
+backend/benchmark_outputs/
+backend/outputs_preview.json
+
+# Generated or bulky test data
+backend/tests/fixtures/
+backend/examples/
+test/
+
+# Reports, documents, and local deliverables
+reports/
+*.docx
+*.pptx
+*.pdf
+*.xlsx
+*.xls
+*.csv
+*.drawio
+*.inspect.ndjson
+
+# Root-level helper/report scripts that are not algorithm code
+/scripts/
 
 # Misc
 *.bak
@@ -68,6 +98,5 @@ docs/superpowers/
 *.cache
 
 projects/**
-./backer
+/backer
 backend/docs/**
-

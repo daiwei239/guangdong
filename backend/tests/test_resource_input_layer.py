@@ -1,6 +1,9 @@
 import json
+import shutil
 import sys
 from pathlib import Path
+
+import pytest
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -188,3 +191,180 @@ def test_input_layer_aggregates_flat_resource_events() -> None:
     assert len(state.resources) == 1
     assert state.resources[0].attributes["cpu"]["cpu_total_cores"] == 64
     assert state.resources[0].metrics["dynamic_state"]["availability_score"] == 0.82
+
+
+def test_input_layer_rejects_invalid_cluster_type_in_events() -> None:
+    from app.input.resource_input import resource_input_layer
+
+    temp_dir = BACKEND_ROOT / ".pytest_invalid_cluster_type_tmp"
+    temp_dir.mkdir(exist_ok=True)
+    input_path = temp_dir / "InvalidClusterTypeEvents.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "events": [
+                    {
+                        "source_type": "agent_collect",
+                        "source_name": "NodeAgent",
+                        "timestamp": "2026-05-18T10:31:59+08:00",
+                        "trace_id": "TRACE-R20260518-000001",
+                        "node_id": "N-C01-0001",
+                        "resource_type": "CPU",
+                        "attributes": {
+                            "cluster_type": "invalid",
+                            "node_role": "compute",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="cluster_type"):
+            resource_input_layer.read_resource_state(input_path)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_input_layer_rejects_invalid_node_role_in_events() -> None:
+    from app.input.resource_input import resource_input_layer
+
+    temp_dir = BACKEND_ROOT / ".pytest_invalid_node_role_tmp"
+    temp_dir.mkdir(exist_ok=True)
+    input_path = temp_dir / "InvalidNodeRoleEvents.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "events": [
+                    {
+                        "source_type": "agent_collect",
+                        "source_name": "NodeAgent",
+                        "timestamp": "2026-05-18T10:31:59+08:00",
+                        "trace_id": "TRACE-R20260518-000001",
+                        "node_id": "N-C01-0001",
+                        "resource_type": "CPU",
+                        "attributes": {
+                            "cluster_type": "Hybrid",
+                            "node_role": "invalid",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="node_role"):
+            resource_input_layer.read_resource_state(input_path)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_input_layer_rejects_invalid_node_status_in_events() -> None:
+    from app.input.resource_input import resource_input_layer
+
+    temp_dir = BACKEND_ROOT / ".pytest_invalid_node_status_tmp"
+    temp_dir.mkdir(exist_ok=True)
+    input_path = temp_dir / "InvalidNodeStatusEvents.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "events": [
+                    {
+                        "source_type": "realtime_monitor",
+                        "source_name": "Prometheus",
+                        "timestamp": "2026-05-18T10:32:00+08:00",
+                        "trace_id": "TRACE-R20260518-000001",
+                        "node_id": "N-C01-0001",
+                        "metrics": {
+                            "node_status": "invalid",
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="node_status"):
+            resource_input_layer.read_resource_state(input_path)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_input_layer_rejects_invalid_accelerator_type_in_events() -> None:
+    from app.input.resource_input import resource_input_layer
+
+    temp_dir = BACKEND_ROOT / ".pytest_invalid_accelerator_type_tmp"
+    temp_dir.mkdir(exist_ok=True)
+    input_path = temp_dir / "InvalidAcceleratorTypeEvents.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "events": [
+                    {
+                        "source_type": "agent_collect",
+                        "source_name": "NodeAgent",
+                        "timestamp": "2026-05-18T10:31:59+08:00",
+                        "trace_id": "TRACE-R20260518-000001",
+                        "node_id": "N-C01-0001",
+                        "resource_type": "CPU",
+                        "attributes": {
+                            "cluster_type": "Hybrid",
+                            "node_role": "compute",
+                            "accelerator": {
+                                "accelerator_type": "invalid",
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="accelerator_type"):
+            resource_input_layer.read_resource_state(input_path)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def test_input_layer_rejects_invalid_maintenance_state_in_events() -> None:
+    from app.input.resource_input import resource_input_layer
+
+    temp_dir = BACKEND_ROOT / ".pytest_invalid_maintenance_state_tmp"
+    temp_dir.mkdir(exist_ok=True)
+    input_path = temp_dir / "InvalidMaintenanceStateEvents.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "events": [
+                    {
+                        "source_type": "realtime_monitor",
+                        "source_name": "Prometheus",
+                        "timestamp": "2026-05-18T10:32:00+08:00",
+                        "trace_id": "TRACE-R20260518-000001",
+                        "node_id": "N-C01-0001",
+                        "metrics": {
+                            "node_status": "Ready",
+                            "reliability_state": {
+                                "maintenance_state": "invalid",
+                            },
+                        },
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    try:
+        with pytest.raises(ValueError, match="maintenance_state"):
+            resource_input_layer.read_resource_state(input_path)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
